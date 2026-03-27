@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -25,24 +25,36 @@ interface CuttingTool {
   mrr:  number | null;
 }
 
-interface CompareSlot {
+// ── Setup (for Compare Setups tab) ─────────────────────────────────────────
+
+interface Setup {
+  id:      string;
+  name:    string;
   toolId:  string;
   D:       string;
-  R:       string;
+  R:       string; // corner radius — display/context only, not in MRR formula
   z:       string;
-  machine: Machine;
+  machine: "Danusys" | "Hurco";
   vc:      string;
   fz:      string;
   ap:      string;
   ae:      string;
 }
 
+interface SetupResult {
+  idealRpm:  number;
+  clamped:   boolean;
+  actualRpm: number;
+  maxRpm:    number;
+  feed:      number;
+  mrr:       number | null;
+}
+
 // ── Machine limits ─────────────────────────────────────────────────────────
 
-const MACHINE_MAX_RPM: Record<Machine, number> = {
+const MACHINE_MAX_RPM: Record<"Danusys" | "Hurco", number> = {
   Danusys: 4250,
   Hurco:   14000,
-  Both:    14000,
 };
 
 const MACHINES: Machine[] = ["Danusys", "Hurco", "Both"];
@@ -53,16 +65,39 @@ const MACHINE_COLORS: Record<Machine, string> = {
   Both:    "bg-purple-100 text-purple-700 border-purple-300",
 };
 
-// ── Calculator formulas ────────────────────────────────────────────────────
+// ── Formulas ───────────────────────────────────────────────────────────────
 
+// S = (Vc × 1000) / (π × D)
 function calcRpm(vc: number, D: number): number {
   return (vc * 1000) / (Math.PI * D);
 }
+
+// F = Fz × Z × S_actual
 function calcFeed(fz: number, z: number, rpm: number): number {
   return fz * z * rpm;
 }
+
+// MRR = (ae × ap × F) / 1000   [cm³/min]
 function calcMrr(ae: number, ap: number, feed: number): number {
   return (ae * ap * feed) / 1000;
+}
+
+function calcSetupResult(s: Setup): SetupResult | null {
+  const D  = Number(s.D);
+  const z  = Number(s.z);
+  const vc = Number(s.vc);
+  const fz = Number(s.fz);
+  const ap = Number(s.ap);
+  const ae = Number(s.ae);
+  if (!D || !z || !vc || !fz) return null;
+
+  const maxRpm    = MACHINE_MAX_RPM[s.machine];
+  const idealRpm  = calcRpm(vc, D);
+  const clamped   = idealRpm > maxRpm;
+  const actualRpm = clamped ? maxRpm : idealRpm;
+  const feed      = calcFeed(fz, z, actualRpm);
+  const mrr       = ap && ae ? calcMrr(ae, ap, feed) : null;
+  return { idealRpm, clamped, actualRpm, maxRpm, feed, mrr };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -72,31 +107,9 @@ const fmt = (v: number | null | undefined, dec = 1) =>
 
 const numField = (v: string) => (v === "" ? null : Number(v));
 
-// ── Compare slot helpers ───────────────────────────────────────────────────
-
-function emptySlot(): CompareSlot {
-  return { toolId: "", D: "", R: "", z: "", machine: "Hurco", vc: "", fz: "", ap: "", ae: "" };
+function emptySetup(name: string, id: string): Setup {
+  return { id, name, toolId: "", D: "", R: "", z: "", machine: "Hurco", vc: "", fz: "", ap: "", ae: "" };
 }
-
-function calcSlotResult(slot: CompareSlot) {
-  const D  = Number(slot.D);
-  const z  = Number(slot.z);
-  const vc = Number(slot.vc);
-  const fz = Number(slot.fz);
-  const ap = Number(slot.ap);
-  const ae = Number(slot.ae);
-  if (!D || !z || !vc || !fz) return null;
-
-  const maxRpm    = MACHINE_MAX_RPM[slot.machine];
-  const idealRpm  = calcRpm(vc, D);
-  const clamped   = idealRpm > maxRpm;
-  const actualRpm = clamped ? maxRpm : idealRpm;
-  const feed      = calcFeed(fz, z, actualRpm);
-  const mrr       = ap && ae ? calcMrr(ae, ap, feed) : null;
-  return { idealRpm, clamped, actualRpm, maxRpm, feed, mrr };
-}
-
-// ── Empty form state ───────────────────────────────────────────────────────
 
 function emptyForm() {
   return {
@@ -106,56 +119,79 @@ function emptyForm() {
   };
 }
 
-// ── Compare card component ─────────────────────────────────────────────────
+// ── SetupCard ──────────────────────────────────────────────────────────────
 
-function CompareCard({
-  label,
-  slot,
+function SetupCard({
+  setup,
   tools,
-  onChange,
+  canRemove,
+  onUpdate,
+  onRemove,
 }: {
-  label: string;
-  slot: CompareSlot;
-  tools: CuttingTool[];
-  onChange: (key: keyof CompareSlot, value: string) => void;
+  setup:    Setup;
+  tools:    CuttingTool[];
+  canRemove: boolean;
+  onUpdate: (patch: Partial<Setup>) => void;
+  onRemove: () => void;
 }) {
-  const result = calcSlotResult(slot);
+  const result = calcSetupResult(setup);
+  // Warn if rpm is clamped by more than 30% (tool speed significantly limited)
+  const heavilyClamped = result?.clamped && result.idealRpm > result.maxRpm * 1.3;
 
-  const handleToolSelect = (id: string) => {
-    onChange("toolId", id);
-    if (!id) return;
-    const t = tools.find((t) => t.id === id);
+  const handleToolSelect = (toolId: string) => {
+    if (!toolId) { onUpdate({ toolId: "" }); return; }
+    const t = tools.find((t) => t.id === toolId);
     if (!t) return;
-    onChange("D",  String(t.diameter));
-    onChange("R",  t.cornerRadius != null ? String(t.cornerRadius) : "");
-    onChange("z",  String(t.flutes));
-    if (t.vc   != null) onChange("vc",  String(t.vc));
-    if (t.fz   != null) onChange("fz",  String(t.fz));
-    if (t.ap   != null) onChange("ap",  String(t.ap));
-    if (t.ae   != null) onChange("ae",  String(t.ae));
-    if (t.machine !== "Both") onChange("machine", t.machine);
+    onUpdate({
+      toolId,
+      D:       String(t.diameter),
+      R:       t.cornerRadius != null ? String(t.cornerRadius) : "",
+      z:       String(t.flutes),
+      ...(t.vc   != null && { vc:  String(t.vc) }),
+      ...(t.fz   != null && { fz:  String(t.fz) }),
+      ...(t.ap   != null && { ap:  String(t.ap) }),
+      ...(t.ae   != null && { ae:  String(t.ae) }),
+      ...(t.machine !== "Both" && { machine: t.machine }),
+    });
   };
+
+  const inp = "w-full border rounded px-2 py-1 text-sm font-mono";
+  const lbl = "block text-xs text-gray-500 mb-0.5";
 
   return (
     <div className="border rounded-lg bg-white overflow-hidden flex flex-col">
-      {/* card header */}
-      <div className="bg-gray-900 px-4 py-2.5 flex items-center gap-3">
-        <span className="text-sm font-bold text-white uppercase tracking-wider">{label}</span>
+      {/* Card header */}
+      <div className="bg-gray-900 px-3 py-2 flex items-center gap-2">
+        <input
+          value={setup.name}
+          onChange={(e) => onUpdate({ name: e.target.value })}
+          className="flex-1 bg-transparent text-white text-sm font-semibold placeholder-gray-500 outline-none min-w-0"
+          placeholder="Setup name…"
+        />
+        {canRemove && (
+          <button
+            onClick={onRemove}
+            className="text-gray-500 hover:text-gray-300 text-xs ml-auto shrink-0"
+            title="Remove setup"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
-      <div className="p-4 space-y-3 flex-1">
+      <div className="p-3 space-y-2.5 flex-1">
         {/* Tool picker */}
         <div>
-          <label className="block text-xs text-gray-500 mb-1">From library (optional)</label>
+          <label className={lbl}>Tool from library</label>
           <select
-            value={slot.toolId}
+            value={setup.toolId}
             onChange={(e) => handleToolSelect(e.target.value)}
             className="w-full border rounded px-2 py-1.5 text-sm"
           >
             <option value="">— manual entry —</option>
             {tools.map((t) => (
               <option key={t.id} value={t.id}>
-                {t.name} (Ø{t.diameter}, Z{t.flutes})
+                {t.name} (Ø{t.diameter}{t.cornerRadius != null ? ` R${t.cornerRadius}` : ""}, Z{t.flutes})
               </option>
             ))}
           </select>
@@ -163,19 +199,19 @@ function CompareCard({
 
         {/* Geometry */}
         <div className="grid grid-cols-3 gap-2">
-          {[
-            { k: "D" as const, label: "D (mm)", ph: "50" },
-            { k: "R" as const, label: "R (mm)", ph: "2" },
+          {([
+            { k: "D" as const, label: "D (mm)",    ph: "50" },
+            { k: "R" as const, label: "R (mm)",    ph: "0" },
             { k: "z" as const, label: "Z (flutes)", ph: "3" },
-          ].map(({ k, label, ph }) => (
+          ] as const).map(({ k, label, ph }) => (
             <div key={k}>
-              <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
+              <label className={lbl}>{label}</label>
               <input
                 type="number" step="any" min="0"
-                value={slot[k]}
-                onChange={(e) => onChange(k, e.target.value)}
+                value={setup[k]}
+                onChange={(e) => onUpdate({ [k]: e.target.value })}
                 placeholder={ph}
-                className="w-full border rounded px-2 py-1 text-sm font-mono"
+                className={inp}
               />
             </div>
           ))}
@@ -183,10 +219,10 @@ function CompareCard({
 
         {/* Machine */}
         <div>
-          <label className="block text-xs text-gray-500 mb-0.5">Machine</label>
+          <label className={lbl}>Machine</label>
           <select
-            value={slot.machine}
-            onChange={(e) => onChange("machine", e.target.value)}
+            value={setup.machine}
+            onChange={(e) => onUpdate({ machine: e.target.value as "Danusys" | "Hurco" })}
             className="w-full border rounded px-2 py-1 text-sm"
           >
             <option value="Danusys">Danusys (max {MACHINE_MAX_RPM.Danusys.toLocaleString()} rpm)</option>
@@ -194,72 +230,71 @@ function CompareCard({
           </select>
         </div>
 
-        {/* Cutting params */}
+        {/* Cutting parameters */}
         <div className="grid grid-cols-2 gap-2">
-          {[
-            { k: "vc" as const, label: "Vc (m/min)",     ph: "80" },
-            { k: "fz" as const, label: "Fz (mm/tooth)",  ph: "0.05" },
-            { k: "ap" as const, label: "ap (mm)",         ph: "5" },
-            { k: "ae" as const, label: "ae (mm)",         ph: "2" },
-          ].map(({ k, label, ph }) => (
+          {([
+            { k: "vc" as const, label: "Vc (m/min)",    ph: "80"   },
+            { k: "fz" as const, label: "Fz (mm/tooth)", ph: "0.05" },
+            { k: "ap" as const, label: "ap (mm)",        ph: "5"    },
+            { k: "ae" as const, label: "ae (mm)",        ph: "2"    },
+          ] as const).map(({ k, label, ph }) => (
             <div key={k}>
-              <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
+              <label className={lbl}>{label}</label>
               <input
                 type="number" step="any" min="0"
-                value={slot[k]}
-                onChange={(e) => onChange(k, e.target.value)}
+                value={setup[k]}
+                onChange={(e) => onUpdate({ [k]: e.target.value })}
                 placeholder={ph}
-                className="w-full border rounded px-2 py-1 text-sm font-mono"
+                className={inp}
               />
             </div>
           ))}
         </div>
 
         {/* Results */}
-        {result ? (
-          <div className="border-t pt-3 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div className={`rounded p-2.5 ${result.clamped ? "bg-amber-50 border border-amber-200" : "bg-gray-50"}`}>
-                <div className="text-xs text-gray-500">S ideal</div>
-                <div className="text-base font-mono font-bold text-gray-800">
-                  {Math.round(result.idealRpm).toLocaleString()}
+        <div className="border-t pt-2.5">
+          {result ? (
+            <div className="space-y-1.5">
+              {heavilyClamped && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  ⚠ RPM clamped by {Math.round(((result.idealRpm - result.maxRpm) / result.maxRpm) * 100)}% — significant speed loss
                 </div>
-                <div className="text-xs text-gray-400">rpm</div>
-              </div>
-              <div className={`rounded p-2.5 ${result.clamped ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
-                <div className="text-xs text-gray-500">S actual {result.clamped ? "(clamped)" : "(OK)"}</div>
-                <div className={`text-base font-mono font-bold ${result.clamped ? "text-red-700" : "text-green-700"}`}>
-                  {Math.round(result.actualRpm).toLocaleString()}
+              )}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className={`rounded p-2 ${result.clamped ? "bg-amber-50 border border-amber-200" : "bg-gray-50"}`}>
+                  <div className="text-xs text-gray-500">S ideal</div>
+                  <div className="font-mono font-bold text-gray-800 text-sm">
+                    {Math.round(result.idealRpm).toLocaleString()} <span className="text-xs font-normal text-gray-400">rpm</span>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400">rpm · max {result.maxRpm.toLocaleString()}</div>
-              </div>
-              <div className="bg-gray-50 rounded p-2.5">
-                <div className="text-xs text-gray-500">F (feed)</div>
-                <div className="text-base font-mono font-bold text-gray-800">
-                  {Math.round(result.feed).toLocaleString()}
+                <div className={`rounded p-2 ${result.clamped ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
+                  <div className="text-xs text-gray-500">S actual {result.clamped ? "(clamped)" : "(OK)"}</div>
+                  <div className={`font-mono font-bold text-sm ${result.clamped ? "text-red-700" : "text-green-700"}`}>
+                    {Math.round(result.actualRpm).toLocaleString()} <span className="text-xs font-normal text-gray-400">rpm</span>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400">mm/min</div>
-              </div>
-              <div className={`rounded p-2.5 ${result.mrr != null ? "bg-indigo-50 border border-indigo-200" : "bg-gray-50 opacity-50"}`}>
-                <div className="text-xs text-gray-500">MRR</div>
-                {result.mrr != null ? (
-                  <>
-                    <div className="text-base font-mono font-bold text-indigo-700">
-                      {result.mrr.toFixed(2)}
+                <div className="bg-gray-50 rounded p-2">
+                  <div className="text-xs text-gray-500">Feed</div>
+                  <div className="font-mono font-bold text-gray-800 text-sm">
+                    {Math.round(result.feed).toLocaleString()} <span className="text-xs font-normal text-gray-400">mm/min</span>
+                  </div>
+                </div>
+                <div className={`rounded p-2 ${result.mrr != null ? "bg-indigo-50 border border-indigo-200" : "bg-gray-50 opacity-60"}`}>
+                  <div className="text-xs text-gray-500">MRR</div>
+                  {result.mrr != null ? (
+                    <div className="font-mono font-bold text-indigo-700 text-sm">
+                      {result.mrr.toFixed(1)} <span className="text-xs font-normal text-gray-400">cm³/min</span>
                     </div>
-                    <div className="text-xs text-gray-400">cm³/min</div>
-                  </>
-                ) : (
-                  <div className="text-sm text-gray-400 mt-1">enter ap + ae</div>
-                )}
+                  ) : (
+                    <div className="text-xs text-gray-400 mt-0.5">enter ap + ae</div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="border-t pt-3 text-xs text-gray-400">
-            Enter D, Z, Vc and Fz to calculate.
-          </div>
-        )}
+          ) : (
+            <div className="text-xs text-gray-400 py-1">Fill D, Z, Vc, Fz to calculate.</div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -268,25 +303,25 @@ function CompareCard({
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool[] }) {
-  const [tools, setTools]               = useState<CuttingTool[]>(initialTools);
-  const [tab, setTab]                   = useState<Tab>("library");
+  const [tools, setTools]                 = useState<CuttingTool[]>(initialTools);
+  const [tab, setTab]                     = useState<Tab>("library");
   const [machineFilter, setMachineFilter] = useState<Machine | "All">("All");
-  const [showForm, setShowForm]         = useState(false);
-  const [editingId, setEditingId]       = useState<string | null>(null);
-  const [form, setForm]                 = useState(emptyForm());
+  const [showForm, setShowForm]           = useState(false);
+  const [editingId, setEditingId]         = useState<string | null>(null);
+  const [form, setForm]                   = useState(emptyForm());
+  const nextId                            = useRef(3);
 
-  // Calculator state
+  // Calculator state (standalone)
   const [calc, setCalc] = useState({
     D: "", z: "", vc: "", fz: "", ap: "", ae: "",
     machine: "Hurco" as Machine,
   });
 
-  // Compare state
-  const [slotA, setSlotA] = useState<CompareSlot>(emptySlot());
-  const [slotB, setSlotB] = useState<CompareSlot>(emptySlot());
-
-  const resultA = useMemo(() => calcSlotResult(slotA), [slotA]);
-  const resultB = useMemo(() => calcSlotResult(slotB), [slotB]);
+  // Compare Setups state — 2 by default, max 3
+  const [setups, setSetups] = useState<Setup[]>([
+    emptySetup("Setup 1", "s1"),
+    emptySetup("Setup 2", "s2"),
+  ]);
 
   // ── Filtered tools ───────────────────────────────────────────────────────
 
@@ -308,7 +343,7 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
     const ae = Number(calc.ae);
     if (!D || !z || !vc || !fz) return null;
 
-    const maxRpm    = MACHINE_MAX_RPM[calc.machine];
+    const maxRpm    = MACHINE_MAX_RPM[calc.machine as "Danusys" | "Hurco"] ?? 14000;
     const idealRpm  = calcRpm(vc, D);
     const clamped   = idealRpm > maxRpm;
     const actualRpm = clamped ? maxRpm : idealRpm;
@@ -317,23 +352,32 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
     return { idealRpm, clamped, actualRpm, maxRpm, f, mrr };
   }, [calc]);
 
+  // ── Compare setup results ────────────────────────────────────────────────
+
+  const setupResults = useMemo(
+    () => setups.map(calcSetupResult),
+    [setups]
+  );
+
+  // ── Setup helpers ─────────────────────────────────────────────────────────
+
+  const updateSetup = (id: string, patch: Partial<Setup>) =>
+    setSetups((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+
+  const removeSetup = (id: string) =>
+    setSetups((prev) => prev.filter((s) => s.id !== id));
+
+  const addSetup = () => {
+    const id = `s${nextId.current++}`;
+    setSetups((prev) => [...prev, emptySetup(`Setup ${prev.length + 1}`, id)]);
+  };
+
   // ── Form helpers ─────────────────────────────────────────────────────────
 
   const setF = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setC = (k: string, v: string) => setCalc((p) => ({ ...p, [k]: v }));
 
-  const makeSlotSetter = (setter: React.Dispatch<React.SetStateAction<CompareSlot>>) =>
-    (key: keyof CompareSlot, value: string) =>
-      setter((prev) => ({ ...prev, [key]: value }));
-
-  const setA = makeSlotSetter(setSlotA);
-  const setB = makeSlotSetter(setSlotB);
-
-  const startAdd = () => {
-    setForm(emptyForm());
-    setEditingId(null);
-    setShowForm(true);
-  };
+  const startAdd = () => { setForm(emptyForm()); setEditingId(null); setShowForm(true); };
 
   const startEdit = (t: CuttingTool) => {
     setForm({
@@ -387,21 +431,12 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
       ae:   numField(form.ae),
       mrr:  numField(form.mrr),
     };
-
     if (editingId) {
-      const res     = await fetch(`/api/cutting-tools/${editingId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res     = await fetch(`/api/cutting-tools/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const updated = await res.json();
       setTools((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
     } else {
-      const res     = await fetch("/api/cutting-tools", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res     = await fetch("/api/cutting-tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const created = await res.json();
       setTools((prev) => [...prev, created]);
     }
@@ -415,6 +450,18 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
     setTools((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // ── Summary table data ────────────────────────────────────────────────────
+
+  const summaryRows = setups.map((s, i) => {
+    const r   = setupResults[i];
+    const lib = tools.find((t) => t.id === s.toolId);
+    return { setup: s, result: r, toolName: lib?.name ?? (s.D ? `Ø${s.D}` : "—") };
+  });
+
+  const bestMrr = Math.max(
+    ...summaryRows.map((r) => r.result?.mrr ?? -Infinity)
+  );
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -424,14 +471,16 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Cutting Tools</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Tool library · Calculator · Compare</p>
+          <p className="text-xs text-gray-400 mt-0.5">Tool library · Calculator · Compare Setups</p>
         </div>
         {tab === "library" && (
-          <button
-            onClick={startAdd}
-            className="text-sm bg-gray-900 text-white px-3 py-1.5 rounded hover:bg-gray-700"
-          >
+          <button onClick={startAdd} className="text-sm bg-gray-900 text-white px-3 py-1.5 rounded hover:bg-gray-700">
             + Add Tool
+          </button>
+        )}
+        {tab === "compare" && setups.length < 3 && (
+          <button onClick={addSetup} className="text-sm border border-gray-300 text-gray-700 px-3 py-1.5 rounded hover:border-gray-500">
+            + Add Setup
           </button>
         )}
       </div>
@@ -442,30 +491,26 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px capitalize transition-colors ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === t
                 ? "border-gray-900 text-gray-900"
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            {t === "library" ? "Library" : t === "calculator" ? "Calculator" : "Compare"}
+            {t === "library" ? "Library" : t === "calculator" ? "Calculator" : "Compare Setups"}
           </button>
         ))}
       </div>
 
-      {/* ── Library tab ── */}
+      {/* ══ Library tab ══ */}
       {tab === "library" && (
         <div className="space-y-4">
-          {/* Add / Edit form */}
           {showForm && (
             <form onSubmit={handleSubmit} className="border rounded-lg bg-white p-4 space-y-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-semibold text-gray-700">
-                  {editingId ? "Edit Tool" : "New Tool"}
-                </span>
+                <span className="text-sm font-semibold text-gray-700">{editingId ? "Edit Tool" : "New Tool"}</span>
                 <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xs">✕ Cancel</button>
               </div>
-
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-0.5">Name *</label>
@@ -482,7 +527,6 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
                   </select>
                 </div>
               </div>
-
               <div className="grid grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-0.5">D (mm) *</label>
@@ -501,50 +545,37 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
                   <input value={form.notes} onChange={(e) => setF("notes", e.target.value)} className="w-full border rounded px-2 py-1 text-sm" placeholder="Optional" />
                 </div>
               </div>
-
               <div>
                 <div className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1.5">Machining Parameters (reference values)</div>
                 <div className="grid grid-cols-7 gap-2">
                   {[
-                    { k: "vc",   label: "Vc (m/min)",   ph: "80" },
+                    { k: "vc",   label: "Vc (m/min)",   ph: "80"   },
                     { k: "rpm",  label: "S (rpm)",       ph: "3200" },
-                    { k: "feed", label: "F (mm/min)",    ph: "640" },
+                    { k: "feed", label: "F (mm/min)",    ph: "640"  },
                     { k: "fz",   label: "Fz (mm/tooth)", ph: "0.05" },
-                    { k: "ap",   label: "ap (mm)",       ph: "5" },
-                    { k: "ae",   label: "ae (mm)",       ph: "2" },
-                    { k: "mrr",  label: "MRR (cm³/min)", ph: "" },
+                    { k: "ap",   label: "ap (mm)",       ph: "5"    },
+                    { k: "ae",   label: "ae (mm)",       ph: "2"    },
+                    { k: "mrr",  label: "MRR (cm³/min)", ph: ""     },
                   ].map(({ k, label, ph }) => (
                     <div key={k}>
                       <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
-                      <input
-                        type="number" step="any" min="0"
-                        value={(form as Record<string, string>)[k]}
-                        onChange={(e) => setF(k, e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-xs"
-                        placeholder={ph}
-                      />
+                      <input type="number" step="any" min="0" value={(form as Record<string, string>)[k]} onChange={(e) => setF(k, e.target.value)} className="w-full border rounded px-2 py-1 text-xs" placeholder={ph} />
                     </div>
                   ))}
                 </div>
               </div>
-
               <button type="submit" className="bg-gray-900 text-white text-sm px-4 py-1.5 rounded hover:bg-gray-700">
                 {editingId ? "Save Changes" : "Add Tool"}
               </button>
             </form>
           )}
 
-          {/* Machine filter */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-400 mr-1">Machine:</span>
             {(["All", ...MACHINES] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMachineFilter(m)}
+              <button key={m} onClick={() => setMachineFilter(m)}
                 className={`text-xs px-2.5 py-1 rounded border font-medium transition-colors ${
-                  machineFilter === m
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+                  machineFilter === m ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
                 }`}
               >
                 {m === "All" ? `All (${tools.length})` : `${m} (${tools.filter(t => t.machine === m || (m !== "Both" && t.machine === "Both")).length})`}
@@ -552,42 +583,31 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
             ))}
           </div>
 
-          {/* Tool table */}
           <div className="border rounded-lg overflow-hidden bg-white">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {["Tool", "Type", "Machine", "D", "R", "Z", "Vc", "S", "F", "Fz", "ap", "ae", "MRR", ""].map((h) => (
-                      <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        {h}
-                      </th>
+                    {["Tool","Type","Machine","D","R","Z","Vc","S","F","Fz","ap","ae","MRR",""].map((h) => (
+                      <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    {["", "", "", "mm", "mm", "", "m/min", "rpm", "mm/min", "mm/tooth", "mm", "mm", "cm³/min", ""].map((u, i) => (
-                      <th key={i} className="px-3 pb-1 text-left text-gray-400 font-normal normal-case tracking-normal">
-                        {u}
-                      </th>
+                    {["","","","mm","mm","","m/min","rpm","mm/min","mm/tooth","mm","mm","cm³/min",""].map((u, i) => (
+                      <th key={i} className="px-3 pb-1 text-left text-gray-400 font-normal normal-case tracking-normal">{u}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={14} className="px-4 py-6 text-center text-gray-400">
-                        No tools yet. Add one above.
-                      </td>
-                    </tr>
+                    <tr><td colSpan={14} className="px-4 py-6 text-center text-gray-400">No tools yet. Add one above.</td></tr>
                   )}
                   {filtered.map((t) => (
                     <tr key={t.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{t.name}</td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{t.toolType ?? "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${MACHINE_COLORS[t.machine]}`}>
-                          {t.machine}
-                        </span>
+                        <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${MACHINE_COLORS[t.machine]}`}>{t.machine}</span>
                       </td>
                       <td className="px-3 py-2 font-mono tabular-nums">{fmt(t.diameter, 1)}</td>
                       <td className="px-3 py-2 font-mono tabular-nums">{fmt(t.cornerRadius, 1)}</td>
@@ -601,27 +621,9 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
                       <td className="px-3 py-2 font-mono tabular-nums">{fmt(t.mrr, 2)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => loadIntoCalc(t)}
-                            className="text-xs text-indigo-500 hover:text-indigo-700 font-medium"
-                            title="Load into calculator"
-                          >
-                            ⟶ calc
-                          </button>
-                          <button
-                            onClick={() => startEdit(t)}
-                            className="text-xs text-gray-400 hover:text-gray-700"
-                            title="Edit"
-                          >
-                            ✎
-                          </button>
-                          <button
-                            onClick={() => handleDelete(t.id, t.name)}
-                            className="text-xs text-gray-300 hover:text-red-500"
-                            title="Delete"
-                          >
-                            ✕
-                          </button>
+                          <button onClick={() => loadIntoCalc(t)} className="text-xs text-indigo-500 hover:text-indigo-700 font-medium" title="Load into calculator">⟶ calc</button>
+                          <button onClick={() => startEdit(t)} className="text-xs text-gray-400 hover:text-gray-700" title="Edit">✎</button>
+                          <button onClick={() => handleDelete(t.id, t.name)} className="text-xs text-gray-300 hover:text-red-500" title="Delete">✕</button>
                         </div>
                       </td>
                     </tr>
@@ -633,23 +635,18 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
         </div>
       )}
 
-      {/* ── Calculator tab ── */}
+      {/* ══ Calculator tab ══ */}
       {tab === "calculator" && (
         <div className="border rounded-lg bg-white overflow-hidden">
           <div className="bg-gray-900 px-4 py-2.5">
             <span className="text-sm font-bold text-white uppercase tracking-wider">Calculator</span>
             <span className="text-xs text-gray-400 ml-2 font-normal">rpm · feed · MRR</span>
           </div>
-
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-7 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Machine</label>
-                <select
-                  value={calc.machine}
-                  onChange={(e) => setC("machine", e.target.value)}
-                  className="w-full border rounded px-2 py-1.5 text-sm"
-                >
+                <select value={calc.machine} onChange={(e) => setC("machine", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm">
                   <option value="Danusys">Danusys (max {MACHINE_MAX_RPM.Danusys.toLocaleString()} rpm)</option>
                   <option value="Hurco">Hurco (max {MACHINE_MAX_RPM.Hurco.toLocaleString()} rpm)</option>
                 </select>
@@ -664,149 +661,141 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
               ].map(({ k, label, ph, title }) => (
                 <div key={k}>
                   <label className="block text-xs text-gray-500 mb-1" title={title}>{label}</label>
-                  <input
-                    type="number" step="any" min="0"
-                    value={(calc as Record<string, string>)[k]}
-                    onChange={(e) => setC(k, e.target.value)}
-                    placeholder={ph}
-                    className="w-full border rounded px-2 py-1.5 text-sm font-mono"
-                  />
+                  <input type="number" step="any" min="0" value={(calc as Record<string, string>)[k]} onChange={(e) => setC(k, e.target.value)} placeholder={ph} className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
                 </div>
               ))}
             </div>
-
             {calcResult ? (
               <div className="grid grid-cols-4 gap-3 pt-2 border-t">
                 <div className={`rounded p-3 ${calcResult.clamped ? "bg-amber-50 border border-amber-200" : "bg-gray-50"}`}>
                   <div className="text-xs text-gray-500 mb-1">S — Ideal rpm</div>
-                  <div className="text-lg font-mono font-bold text-gray-800">
-                    {Math.round(calcResult.idealRpm).toLocaleString()}
-                  </div>
+                  <div className="text-lg font-mono font-bold text-gray-800">{Math.round(calcResult.idealRpm).toLocaleString()}</div>
                   {calcResult.clamped && <div className="text-xs text-amber-700 mt-1">⚠ exceeds machine limit</div>}
                 </div>
                 <div className={`rounded p-3 ${calcResult.clamped ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
                   <div className="text-xs text-gray-500 mb-1">S — Machine rpm {calcResult.clamped ? "(clamped)" : "(OK)"}</div>
-                  <div className={`text-lg font-mono font-bold ${calcResult.clamped ? "text-red-700" : "text-green-700"}`}>
-                    {Math.round(calcResult.actualRpm).toLocaleString()}
-                  </div>
+                  <div className={`text-lg font-mono font-bold ${calcResult.clamped ? "text-red-700" : "text-green-700"}`}>{Math.round(calcResult.actualRpm).toLocaleString()}</div>
                   <div className="text-xs text-gray-400 mt-1">max {calcResult.maxRpm.toLocaleString()} rpm</div>
                 </div>
                 <div className="bg-gray-50 rounded p-3">
                   <div className="text-xs text-gray-500 mb-1">F — Feed {calcResult.clamped ? "(at machine rpm)" : ""}</div>
-                  <div className="text-lg font-mono font-bold text-gray-800">
-                    {Math.round(calcResult.f).toLocaleString()}
-                  </div>
+                  <div className="text-lg font-mono font-bold text-gray-800">{Math.round(calcResult.f).toLocaleString()}</div>
                   <div className="text-xs text-gray-400 mt-1">mm/min</div>
                 </div>
                 <div className={`rounded p-3 ${calcResult.mrr != null ? "bg-gray-50" : "bg-gray-50 opacity-50"}`}>
                   <div className="text-xs text-gray-500 mb-1">MRR</div>
                   {calcResult.mrr != null ? (
-                    <>
-                      <div className="text-lg font-mono font-bold text-gray-800">{calcResult.mrr.toFixed(2)}</div>
-                      <div className="text-xs text-gray-400 mt-1">cm³/min</div>
-                    </>
+                    <><div className="text-lg font-mono font-bold text-gray-800">{calcResult.mrr.toFixed(2)}</div><div className="text-xs text-gray-400 mt-1">cm³/min</div></>
                   ) : (
                     <div className="text-sm text-gray-400 mt-1">enter ap + ae</div>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="py-3 text-sm text-gray-400 border-t">
-                Enter D, Z, Vc and Fz to calculate.
-              </div>
+              <div className="py-3 text-sm text-gray-400 border-t">Enter D, Z, Vc and Fz to calculate.</div>
             )}
-
-            <div className="text-xs text-gray-400 font-mono space-y-0.5 pt-1 border-t">
-              <div>S = (Vc × 1000) / (π × D)   |   F = Fz × Z × S_actual   |   MRR = (ae × ap × F) / 1000</div>
+            <div className="text-xs text-gray-400 font-mono pt-1 border-t">
+              S = (Vc × 1000) / (π × D)   |   F = Fz × Z × S_actual   |   MRR = (ae × ap × F) / 1000
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Compare tab ── */}
+      {/* ══ Compare Setups tab ══ */}
       {tab === "compare" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CompareCard label="Tool A" slot={slotA} tools={tools} onChange={setA} />
-            <CompareCard label="Tool B" slot={slotB} tools={tools} onChange={setB} />
+          {/* Setup cards */}
+          <div className={`grid gap-4 ${setups.length === 3 ? "grid-cols-1 lg:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}>
+            {setups.map((s) => (
+              <SetupCard
+                key={s.id}
+                setup={s}
+                tools={tools}
+                canRemove={setups.length > 2}
+                onUpdate={(patch) => updateSetup(s.id, patch)}
+                onRemove={() => removeSetup(s.id)}
+              />
+            ))}
           </div>
 
-          {/* Comparison summary */}
-          {(resultA || resultB) && (
+          {/* Comparison summary table */}
+          {summaryRows.some((r) => r.result !== null) && (
             <div className="border rounded-lg bg-white overflow-hidden">
-              <div className="bg-gray-100 border-b px-4 py-2">
+              <div className="bg-gray-100 border-b px-4 py-2 flex items-center gap-2">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Comparison Summary</span>
+                <span className="text-xs text-gray-400">— highest MRR highlighted</span>
               </div>
-              <div className="p-4">
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  {/* MRR row */}
-                  <div className="text-center">
-                    <div className="text-xs text-gray-500 mb-1">Tool A — MRR</div>
-                    <div className="text-xl font-mono font-bold text-gray-800">
-                      {resultA?.mrr != null ? resultA.mrr.toFixed(2) : "—"}
-                    </div>
-                    <div className="text-xs text-gray-400">cm³/min</div>
-                  </div>
-                  <div className="text-center border-x">
-                    <div className="text-xs text-gray-500 mb-1">Difference</div>
-                    {resultA?.mrr != null && resultB?.mrr != null ? (() => {
-                      const diff = resultA.mrr - resultB.mrr;
-                      const pct  = resultB.mrr > 0 ? (diff / resultB.mrr) * 100 : 0;
-                      const winner = diff > 0 ? "A" : diff < 0 ? "B" : null;
-                      return (
-                        <>
-                          <div className={`text-xl font-mono font-bold ${diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-gray-600"}`}>
-                            {diff > 0 ? "+" : ""}{diff.toFixed(2)}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {pct !== 0 ? `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%` : "equal"}
-                          </div>
-                          {winner && (
-                            <div className={`mt-1 text-xs font-semibold ${winner === "A" ? "text-green-600" : "text-red-500"}`}>
-                              Tool {winner} removes more
-                            </div>
-                          )}
-                        </>
-                      );
-                    })() : (
-                      <div className="text-gray-400 text-sm mt-1">—</div>
-                    )}
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xs text-gray-500 mb-1">Tool B — MRR</div>
-                    <div className="text-xl font-mono font-bold text-gray-800">
-                      {resultB?.mrr != null ? resultB.mrr.toFixed(2) : "—"}
-                    </div>
-                    <div className="text-xs text-gray-400">cm³/min</div>
-                  </div>
-                </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      {["Setup", "Tool", "Machine", "S ideal", "S actual", "Feed", "MRR", "vs best"].map((h) => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      {["","","","rpm","rpm","mm/min","cm³/min",""].map((u, i) => (
+                        <th key={i} className="px-3 pb-1 text-left text-gray-400 font-normal normal-case tracking-normal">{u}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {summaryRows.map(({ setup, result, toolName }) => {
+                      if (!result) {
+                        return (
+                          <tr key={setup.id} className="text-gray-400">
+                            <td className="px-3 py-2 font-medium text-gray-700">{setup.name || "—"}</td>
+                            <td colSpan={7} className="px-3 py-2 italic">incomplete — fill D, Z, Vc, Fz</td>
+                          </tr>
+                        );
+                      }
+                      const isBest   = result.mrr != null && result.mrr === bestMrr && bestMrr > -Infinity;
+                      const vsB      = (result.mrr != null && bestMrr > 0 && !isBest)
+                        ? ((result.mrr - bestMrr) / bestMrr * 100).toFixed(1)
+                        : null;
+                      const heavyCl  = result.clamped && result.idealRpm > result.maxRpm * 1.3;
 
-                {/* Feed diff */}
-                {resultA && resultB && (
-                  <div className="mt-3 pt-3 border-t grid grid-cols-3 gap-4 text-sm text-center">
-                    <div>
-                      <div className="text-xs text-gray-500 mb-0.5">Tool A — Feed</div>
-                      <div className="font-mono font-semibold text-gray-700">{Math.round(resultA.feed).toLocaleString()} <span className="text-xs text-gray-400">mm/min</span></div>
-                    </div>
-                    <div className="border-x">
-                      <div className="text-xs text-gray-500 mb-0.5">Feed diff</div>
-                      <div className={`font-mono font-semibold ${resultA.feed - resultB.feed > 0 ? "text-green-600" : "text-red-500"}`}>
-                        {resultA.feed - resultB.feed > 0 ? "+" : ""}{Math.round(resultA.feed - resultB.feed).toLocaleString()} <span className="text-xs">mm/min</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-500 mb-0.5">Tool B — Feed</div>
-                      <div className="font-mono font-semibold text-gray-700">{Math.round(resultB.feed).toLocaleString()} <span className="text-xs text-gray-400">mm/min</span></div>
-                    </div>
-                  </div>
-                )}
+                      return (
+                        <tr key={setup.id} className={isBest ? "bg-indigo-50" : "hover:bg-gray-50"}>
+                          <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">
+                            {setup.name || "—"}
+                            {isBest && <span className="ml-1.5 text-indigo-600 font-semibold">★</span>}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{toolName}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${MACHINE_COLORS[setup.machine]}`}>
+                              {setup.machine}
+                            </span>
+                          </td>
+                          <td className={`px-3 py-2 font-mono tabular-nums ${result.clamped ? "text-amber-600" : ""}`}>
+                            {Math.round(result.idealRpm).toLocaleString()}
+                          </td>
+                          <td className={`px-3 py-2 font-mono tabular-nums ${result.clamped ? "text-red-600 font-semibold" : "text-green-700"}`}>
+                            {Math.round(result.actualRpm).toLocaleString()}
+                            {heavyCl && <span className="ml-1 text-amber-600" title="Heavily clamped">⚠</span>}
+                          </td>
+                          <td className="px-3 py-2 font-mono tabular-nums">{Math.round(result.feed).toLocaleString()}</td>
+                          <td className={`px-3 py-2 font-mono tabular-nums font-semibold ${isBest ? "text-indigo-700" : ""}`}>
+                            {result.mrr != null ? result.mrr.toFixed(1) : "—"}
+                          </td>
+                          <td className={`px-3 py-2 font-mono tabular-nums ${vsB ? "text-red-500" : "text-indigo-600 font-semibold"}`}>
+                            {isBest ? "best" : vsB ? `${vsB}%` : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-2 border-t bg-gray-50 text-xs text-gray-400 font-mono">
+                S = (Vc × 1000) / (π × D)   ·   F = Fz × Z × S_actual   ·   MRR = (ae × ap × F) / 1000   ·   ⚠ = S clamped &gt;30%
               </div>
             </div>
           )}
 
-          {!resultA && !resultB && (
-            <div className="text-sm text-gray-400 text-center py-4">
-              Fill in D, Z, Vc and Fz for at least one tool to see results.
+          {summaryRows.every((r) => r.result === null) && (
+            <div className="text-sm text-gray-400 text-center py-6">
+              Fill in D, Z, Vc and Fz in at least one setup to see results.
             </div>
           )}
         </div>
