@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import {
   type Setup,
   type CuttingTool,
+  type Preset,
   MACHINE_MAX_RPM,
   calcSetupResult,
   getClampPct,
@@ -13,13 +15,16 @@ import {
 } from "./calc";
 
 interface SetupCardProps {
-  setup:       Setup;
-  tools:       CuttingTool[];
-  canRemove:   boolean;
-  onUpdate:    (patch: Partial<Setup>) => void;
-  onRemove:    () => void;
-  onDuplicate: () => void;
-  onReset:     () => void;
+  setup:          Setup;
+  tools:          CuttingTool[];
+  canRemove:      boolean;
+  onUpdate:       (patch: Partial<Setup>) => void;
+  onRemove:       () => void;
+  onDuplicate:    () => void;
+  onReset:        () => void;
+  presets:        Preset[];
+  onSavePreset:   (name: string) => void;
+  onDeletePreset: (id: string) => void;
 }
 
 export function SetupCard({
@@ -30,10 +35,30 @@ export function SetupCard({
   onRemove,
   onDuplicate,
   onReset,
+  presets,
+  onSavePreset,
+  onDeletePreset,
 }: SetupCardProps) {
   const result       = calcSetupResult(setup);
   const clampPct     = result ? getClampPct(result) : 0;
   const heavyClamped = result ? isHeavilyClamped(result) : false;
+
+  const [saveOpen,        setSaveOpen]        = useState(false);
+  const [saveName,        setSaveName]        = useState("");
+  const [selectedPreset,  setSelectedPreset]  = useState("");
+
+  const handleLoadPreset = (id: string) => {
+    const p = presets.find((x) => x.id === id);
+    if (!p) return;
+    onUpdate({ toolId: p.toolId, D: p.D, R: p.R, z: p.z, machine: p.machine, vc: p.vc, fz: p.fz, ap: p.ap, ae: p.ae });
+  };
+
+  const handleSave = () => {
+    if (!saveName.trim() && !setup.name) return;
+    onSavePreset(saveName.trim() || setup.name);
+    setSaveName("");
+    setSaveOpen(false);
+  };
 
   const handleToolSelect = (toolId: string) => {
     if (!toolId) { onUpdate({ toolId: "" }); return; }
@@ -71,6 +96,55 @@ export function SetupCard({
         <button onClick={onReset}     className="text-gray-500 hover:text-gray-200 text-xs px-1 shrink-0" title="Reset setup">↺</button>
         {canRemove && (
           <button onClick={onRemove}  className="text-gray-500 hover:text-red-400  text-xs px-1 shrink-0" title="Remove setup">✕</button>
+        )}
+      </div>
+
+      {/* Preset strip */}
+      <div className="border-b bg-gray-50 px-3 py-1.5 flex items-center gap-2 min-h-[34px]">
+        {saveOpen ? (
+          <>
+            <input
+              autoFocus
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setSaveOpen(false); }}
+              placeholder={setup.name || "Preset name…"}
+              className="flex-1 border rounded px-2 py-0.5 text-xs min-w-0"
+            />
+            <button onClick={handleSave} className="text-xs text-green-700 hover:text-green-900 font-bold shrink-0" title="Confirm save">✓</button>
+            <button onClick={() => setSaveOpen(false)} className="text-xs text-gray-400 hover:text-gray-700 shrink-0" title="Cancel">✕</button>
+          </>
+        ) : (
+          <>
+            {presets.length > 0 && (
+              <>
+                <select
+                  value={selectedPreset}
+                  onChange={(e) => { setSelectedPreset(e.target.value); if (e.target.value) handleLoadPreset(e.target.value); }}
+                  className="flex-1 border rounded px-2 py-0.5 text-xs min-w-0 bg-white"
+                >
+                  <option value="">— load preset —</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {selectedPreset && (
+                  <button
+                    onClick={() => { onDeletePreset(selectedPreset); setSelectedPreset(""); }}
+                    className="text-gray-400 hover:text-red-500 text-xs shrink-0"
+                    title="Delete this preset"
+                  >✕</button>
+                )}
+              </>
+            )}
+            <button
+              onClick={() => { setSaveName(setup.name); setSaveOpen(true); }}
+              className="text-xs text-gray-500 hover:text-gray-800 shrink-0 ml-auto"
+              title="Save current setup as preset"
+            >
+              💾 save
+            </button>
+          </>
         )}
       </div>
 

@@ -40,6 +40,21 @@ export interface Setup {
   ae:      string;  // radial depth of cut [mm]
 }
 
+/** A saved preset — persisted to localStorage; recomputed on load. */
+export interface Preset {
+  id:      string;       // timestamp-based key
+  name:    string;       // user-defined label, e.g. "Al roughing ap5 ae2"
+  toolId:  string;
+  D:       string;
+  R:       string;
+  z:       string;
+  machine: CalcMachine;
+  vc:      string;
+  fz:      string;
+  ap:      string;
+  ae:      string;
+}
+
 /** Computed outputs for one setup. */
 export interface SetupResult {
   idealRpm:  number;        // theoretical spindle speed

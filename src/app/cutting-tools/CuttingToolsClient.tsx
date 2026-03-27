@@ -17,6 +17,7 @@ import {
   fmtPct,
 } from "./calc";
 import { SetupCard } from "./SetupCard";
+import { usePresets } from "./usePresets";
 
 // ── Local types (library/UI only) ──────────────────────────────────────────
 
@@ -68,6 +69,9 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
     D: "", z: "", vc: "", fz: "", ap: "", ae: "",
     machine: "Hurco" as Machine,
   });
+
+  // Saved presets (localStorage)
+  const { presets, savePreset, deletePreset } = usePresets();
 
   // Compare Setups — 2 by default (A, B), max 3
   const [setups, setSetups] = useState<Setup[]>([
@@ -469,6 +473,9 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
                 onRemove={() => removeSetup(s.id)}
                 onDuplicate={() => duplicateSetup(s.id)}
                 onReset={() => resetSetup(s.id)}
+                presets={presets}
+                onSavePreset={(name) => savePreset(name, s)}
+                onDeletePreset={deletePreset}
               />
             ))}
           </div>
