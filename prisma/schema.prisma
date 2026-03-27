@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Family {
+  id          String       @id @default(cuid())
+  name        String
+  notes       String?
+  tools       Tool[]
+  attachments Attachment[]
+}
+
+model Tool {
+  id          String          @id @default(cuid())
+  projectName String
+  dueDate     DateTime?
+  status      ToolStatus      @default(Management)
+  familyId    String?
+  family      Family?         @relation(fields: [familyId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  parts       Part[]
+  sections    Section[]
+  events      CalendarEvent[]
+}
+
+model Section {
+  id     String @id @default(cuid())
+  name   String
+  toolId String
+  tool   Tool   @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  parts  Part[]
+}
+
+model Part {
+  id            String         @id @default(cuid())
+  toolId        String
+  tool          Tool           @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  sectionId     String?
+  section       Section?       @relation(fields: [sectionId], references: [id])
+  name          String
+  type          PartType       @default(standard)
+  quantity      Int            @default(1)
+  /// @deprecated Not derived from operations. Kept for schema compatibility; do not use in active logic or UI.
+  status        PartStatus     @default(NotOrdered)
+  supplier      String?
+  notes         String?
+  drawingRef    String?
+  requiresLaser Boolean        @default(false)
+  material      String?
+  thickness     String?
+  size          String?
+  createdAt     DateTime       @default(now())
+  operations    Operation[]
+  outsourceJobs OutsourceJob[]
+  attachments   Attachment[]
+  orders        Order[]
+  orderItems    OrderItem[]
+}
+
+model Attachment {
+  id        String         @id @default(cuid())
+  name      String
+  type      AttachmentType
+  filePath  String?
+  url       String?
+  partId    String?
+  part      Part?          @relation(fields: [partId], references: [id], onDelete: SetNull)
+  familyId  String?
+  family    Family?        @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  createdAt DateTime       @default(now())
+}
+
+model Operation {
+  id            String          @id @default(cuid())
+  partId        String
+  part          Part            @relation(fields: [partId], references: [id], onDelete: Cascade)
+  name          String
+  order         Int
+  type          OperationType   @default(internal)
+  status            OperationStatus @default(NotStarted)
+  dependsOnPrevious Boolean         @default(true)
+  machine       String?
+  supplier      String?
+  estimatedTime Float?
+  actualTime    Float?
+  createdAt     DateTime        @default(now())
+  orderId        String?
+  linkedOrder    Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  outsourceJobId String?
+  linkedJob      OutsourceJob?   @relation(fields: [outsourceJobId], references: [id], onDelete: SetNull)
+}
+
+model Order {
+  id               String       @id @default(cuid())
+  supplier         String
+  supplierId       String?
+  linkedSupplier   Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  partId           String?
+  part             Part?        @relation(fields: [partId], references: [id], onDelete: SetNull)
+  status           OrderStatus  @default(Draft)
+  createdAt        DateTime     @default(now())
+  eta              DateTime?
+  notes            String?
+  poNumber         String?
+  supplierQuoteRef String?
+  operations       Operation[]
+  items            OrderItem[]
+}
+
+model OrderItem {
+  id      String  @id @default(cuid())
+  orderId String
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  partId  String
+  part    Part    @relation(fields: [partId], references: [id], onDelete: Cascade)
+  qty     Int     @default(1)
+  notes   String?
+}
+
+model OutsourceJob {
+  id             String          @id @default(cuid())
+  partId         String
+  part           Part            @relation(fields: [partId], references: [id], onDelete: Cascade)
+  company        String
+  supplierId     String?
+  linkedSupplier Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  status         OutsourceStatus @default(Pending)
+  sentDate       DateTime?
+  eta            DateTime?
+  notes          String?
+  externalJobRef String?
+  operations     Operation[]
+}
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  entityType String
+  entityId   String
+  entityName String
+  action     String
+  detail     String?
+  toolId     String?
+  partId     String?
+  createdAt  DateTime @default(now())
+}
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  toolId      String?
+  tool        Tool?    @relation(fields: [toolId], references: [id], onDelete: SetNull)
+  title       String
+  date        DateTime
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+enum ToolStatus {
+  Management
+  CAD
+  CAM
+  Manufacturing
+  Toolmaking
+  Done
+  Cancelled
+}
+
+model Supplier {
+  id                   String         @id @default(cuid())
+  name                 String
+  email                String
+  notes                String?
+  emailSubjectTemplate String?
+  emailBodyTemplate    String?
+  createdAt            DateTime       @default(now())
+  orders               Order[]
+  outsourceJobs        OutsourceJob[]
+}
+
+enum PartType {
+  standard
+  custom
+  outsource
+}
+
+enum PartStatus {
+  NotOrdered
+  Ordered
+  InProgress
+  Ready
+  Installed
+}
+
+enum OperationType {
+  procurement
+  internal
+  outsource
+  inspection
+  assembly
+}
+
+enum OperationStatus {
+  NotStarted
+  Ready
+  InProgress
+  Sent
+  Done
+  Blocked
+  NotOrdered
+  Ordered
+  Received
+  Pending
+}
+
+enum OrderStatus {
+  Draft
+  Sent
+  Received
+  Cancelled
+}
+
+enum OutsourceStatus {
+  Pending
+  Sent
+  InProgress
+  Done
+  Cancelled
+}
+
+enum AttachmentType {
+  DXF
+  PDF
+  STEP
+}
+
+// ── Cutting Tools module (separate from production-control workflow) ────────
+
+enum CuttingToolMachine {
+  Danusys
+  Hurco
+  Both
+}
+
+model CuttingTool {
+  id           String             @id @default(cuid())
+  name         String
+  machine      CuttingToolMachine
+  toolType     String?
+  diameter     Float
+  cornerRadius Float?
+  flutes       Int
+  notes        String?
+  // Reference / nominal machining parameters
+  vc           Float?   // cutting speed [m/min]
+  rpm          Float?   // spindle speed [rpm]
+  feed         Float?   // feed rate [mm/min]
+  fz           Float?   // feed per tooth [mm/tooth]
+  ap           Float?   // axial depth of cut [mm]
+  ae           Float?   // radial depth of cut [mm]
+  mrr          Float?   // material removal rate [cm³/min]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
