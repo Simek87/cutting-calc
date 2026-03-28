@@ -23,9 +23,9 @@ const ROWS = [
   },
   {
     type:  "Ballnose",
-    vcMin: 150, vcMax: 400,
+    vcMin: 300, vcMax: 500,
     fzMin: 0.01, fzMax: 0.05,
-    notes: "Vc at ball centre is 0 — use effective Deff",
+    notes: "Vc applied to Deff, not nominal D. Values for finishing — use TipRad for semi-finishing.",
   },
   {
     type:  "Drill",
@@ -41,7 +41,7 @@ const ROWS = [
   },
 ] as const;
 
-const VC_MIN = 200;
+const VC_MIN = 300;
 const VC_MAX = 500;
 
 function roundTo10(n: number) {
