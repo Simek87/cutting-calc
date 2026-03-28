@@ -60,8 +60,6 @@ export default async function RootLayout({
               </Link>
               <a
                 href="https://cutting-calc.vercel.app/cutting-tools"
-                target="_blank"
-                rel="noopener noreferrer"
                 className="text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded px-2.5 py-0.5 hover:bg-indigo-50 transition-colors"
               >
                 Milling Calc
