@@ -26,6 +26,7 @@ import {
 import { SetupCard } from "./SetupCard";
 import { usePresets } from "./usePresets";
 import { MrrComparator } from "./MrrComparator";
+import { ReferenceTab } from "./ReferenceTab";
 
 // ── Local types (library/UI only) ──────────────────────────────────────────
 
@@ -789,69 +790,7 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
       )}
 
       {/* ══ Reference tab ══ */}
-      {tab === "reference" && (
-        <div className="border rounded-lg bg-white overflow-hidden">
-          <div className="bg-gray-900 px-4 py-2.5">
-            <span className="text-sm font-bold text-white uppercase tracking-wider">Reference</span>
-            <span className="text-xs text-gray-400 ml-2 font-normal">Aluminium (6061 / 7075) — Recommended cutting parameters</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  {["Tool Type", "Vc min–max (m/min)", "Fz min–max (mm/tooth)", "Notes"].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-600 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {[
-                  {
-                    type: "Face Mill",
-                    vc:   "400 – 800",
-                    fz:   "0.05 – 0.20",
-                    notes: "Use high Vc with sharp inserts; avoid built-up edge",
-                  },
-                  {
-                    type: "End Mill (flat)",
-                    vc:   "200 – 500",
-                    fz:   "0.02 – 0.10",
-                    notes: "Reduce ae for slotting; 3–4 flutes recommended",
-                  },
-                  {
-                    type: "Ball Nose Mill",
-                    vc:   "150 – 400",
-                    fz:   "0.01 – 0.05",
-                    notes: "Vc at ball centre is 0 — use effective diameter",
-                  },
-                  {
-                    type: "Drill",
-                    vc:   "60 – 150",
-                    fz:   "0.05 – 0.15 / rev",
-                    notes: "Peck drill for chip evacuation; through-coolant preferred",
-                  },
-                  {
-                    type: "Reamer",
-                    vc:   "30 – 80",
-                    fz:   "0.05 – 0.20 / rev",
-                    notes: "0.1–0.3 mm stock for finishing; flood coolant",
-                  },
-                ].map((row) => (
-                  <tr key={row.type} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{row.type}</td>
-                    <td className="px-4 py-2.5 font-mono tabular-nums text-gray-700">{row.vc}</td>
-                    <td className="px-4 py-2.5 font-mono tabular-nums text-gray-700">{row.fz}</td>
-                    <td className="px-4 py-2.5 text-gray-500 text-xs">{row.notes}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-4 py-2 border-t bg-gray-50 text-xs text-gray-400 italic">
-            Values are starting points. Adjust for coating, coolant strategy, and rigidity.
-          </div>
-        </div>
-      )}
+      {tab === "reference" && <ReferenceTab />}
 
     </div>
   );
