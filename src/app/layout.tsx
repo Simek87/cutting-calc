@@ -45,9 +45,9 @@ export default function RootLayout({
           <Link href="/suppliers" className="text-sm text-gray-500 hover:text-gray-800">
             Suppliers
           </Link>
-          <Link href="/cutting-tools" className="text-sm text-gray-500 hover:text-gray-800">
+          <a href="https://cutting-calc.vercel.app/cutting-tools" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-gray-800">
             Cutting Tools
-          </Link>
+          </a>
         </nav>
         {children}
       </body>
