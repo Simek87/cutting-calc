@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 
 const ROWS = [
   {
@@ -152,6 +152,197 @@ function DeffCalculator() {
   );
 }
 
+// ── Cheat sheet helpers ────────────────────────────────────────────────────
+
+const th = "px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap";
+const td = "px-3 py-2 font-mono tabular-nums text-sm whitespace-nowrap";
+const tdL = "px-3 py-2 text-sm whitespace-nowrap font-medium text-gray-900";
+
+function CardShell({ title, subtitle, footer, children }: {
+  title: string; subtitle?: string; footer?: string; children: React.ReactNode;
+}) {
+  return (
+    <div className="border rounded-lg bg-white overflow-hidden mt-4">
+      <div className="bg-gray-800 px-4 py-2.5">
+        <span className="text-sm font-bold text-white">{title}</span>
+        {subtitle && <span className="text-xs text-gray-400 ml-2 font-normal">{subtitle}</span>}
+      </div>
+      <div className="overflow-x-auto">{children}</div>
+      {footer && (
+        <div className="px-4 py-2.5 border-t bg-gray-50 text-xs text-gray-400 italic">{footer}</div>
+      )}
+    </div>
+  );
+}
+
+// ── Cheat Sheet 1 — Ballnose Finishing ─────────────────────────────────────
+
+const BN_ROWS = [
+  { d: "D2",  ap: 0.2,  ae: 0.200, deff: 1.2, s: 14000, clamped: true,  vcAct: 52.8,  fz: 0.02, f: 560 },
+  { d: "D3",  ap: 0.3,  ae: 0.245, deff: 1.8, s: 14000, clamped: true,  vcAct: 79.2,  fz: 0.02, f: 560 },
+  { d: "D4",  ap: 0.4,  ae: 0.283, deff: 2.4, s: 14000, clamped: true,  vcAct: 105.6, fz: 0.02, f: 560 },
+  { d: "D5",  ap: 0.5,  ae: 0.316, deff: 3.0, s: 14000, clamped: true,  vcAct: 131.9, fz: 0.02, f: 560 },
+  { d: "D6",  ap: 0.6,  ae: 0.346, deff: 3.6, s: 14000, clamped: true,  vcAct: 158.3, fz: 0.02, f: 560 },
+  { d: "D8",  ap: 0.8,  ae: 0.400, deff: 4.8, s: 14000, clamped: true,  vcAct: 211.1, fz: 0.02, f: 560 },
+  { d: "D10", ap: 1.0,  ae: 0.447, deff: 6.0, s: 14000, clamped: true,  vcAct: 263.9, fz: 0.02, f: 560 },
+  { d: "D12", ap: 1.2,  ae: 0.490, deff: 7.2, s: 14000, clamped: true,  vcAct: 316.7, fz: 0.02, f: 560 },
+  { d: "D16", ap: 1.6,  ae: 0.566, deff: 9.6, s: 13260, clamped: false, vcAct: 400.0, fz: 0.02, f: 531 },
+] as const;
+
+function BallnoseCheatSheet() {
+  return (
+    <CardShell
+      title="Ballnose Finishing — Aluminium (Z=2, cusp ≤ 0.005mm)"
+      subtitle="Vc=400 m/min applied to Deff. Machine limit: 14,000 rpm (Hurco)"
+      footer="* S clamped to 14,000 rpm (Hurco max). Vc actual < 400 m/min for D≤12. Use HSC spindle for full Vc on small diameters."
+    >
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            {["D (mm)", "ap (mm)", "ae (mm)", "Deff (mm)", "S (rpm)", "Vc actual (m/min)", "Fz (mm)", "F (mm/min)"].map((h) => (
+              <th key={h} className={th}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {BN_ROWS.map((r) => (
+            <tr key={r.d} className={r.clamped ? "bg-amber-50" : "hover:bg-gray-50"}>
+              <td className={tdL}>{r.d}</td>
+              <td className={td}>{r.ap.toFixed(1)}</td>
+              <td className={td}>{r.ae.toFixed(3)}</td>
+              <td className={td}>{r.deff.toFixed(1)}</td>
+              <td className={`${td} ${r.clamped ? "text-amber-700 font-semibold" : "text-gray-700"}`}>
+                {r.s.toLocaleString()}
+                {r.clamped && (
+                  <span className="ml-1" title="RPM clamped to machine limit — ideal Vc=400 not achievable on this diameter">⚠</span>
+                )}
+              </td>
+              <td className={`${td} ${r.clamped ? "text-amber-700" : "text-gray-700"}`}>{r.vcAct.toFixed(1)}</td>
+              <td className={td}>{r.fz.toFixed(2)}</td>
+              <td className={td}>{r.f}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </CardShell>
+  );
+}
+
+// ── Cheat Sheet 2 — TipRad Finishing ──────────────────────────────────────
+
+const TR_ROWS = [
+  { tool: "D6R1",    d: 6,  r: 1.0, ap: 0.2, ae: 0.3, s: 21220, clamped: true,  fz: 0.08, f: 5093 },
+  { tool: "D8R1",    d: 8,  r: 1.0, ap: 0.2, ae: 0.3, s: 15920, clamped: false, fz: 0.08, f: 3821 },
+  { tool: "D10R1",   d: 10, r: 1.0, ap: 0.2, ae: 0.3, s: 12730, clamped: false, fz: 0.08, f: 3055 },
+  { tool: "D12R1",   d: 12, r: 1.0, ap: 0.2, ae: 0.3, s: 10610, clamped: false, fz: 0.08, f: 2546 },
+  { tool: "D12R1.5", d: 12, r: 1.5, ap: 0.2, ae: 0.3, s: 10610, clamped: false, fz: 0.08, f: 2546 },
+  { tool: "D12R2",   d: 12, r: 2.0, ap: 0.2, ae: 0.3, s: 10610, clamped: false, fz: 0.08, f: 2546 },
+] as const;
+
+function TipRadCheatSheet() {
+  return (
+    <CardShell
+      title="TipRad Finishing — Aluminium (Z=3)"
+      subtitle="Vc=400 m/min on nominal D, ap=0.2mm, ae=0.3mm, Fz=0.08"
+      footer="ae=0.3mm fixed stepover. Adjust Fz if surface finish requires it."
+    >
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            {["Tool", "D (mm)", "R (mm)", "ap (mm)", "ae (mm)", "S (rpm)", "Fz (mm)", "F (mm/min)"].map((h) => (
+              <th key={h} className={th}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {TR_ROWS.map((r) => (
+            <tr key={r.tool} className={r.clamped ? "bg-amber-50" : "hover:bg-gray-50"}>
+              <td className={tdL}>{r.tool}</td>
+              <td className={td}>{r.d}</td>
+              <td className={td}>{r.r.toFixed(1)}</td>
+              <td className={td}>{r.ap.toFixed(1)}</td>
+              <td className={td}>{r.ae.toFixed(1)}</td>
+              <td className={`${td} ${r.clamped ? "text-amber-700 font-semibold" : "text-gray-700"}`}>
+                {r.s.toLocaleString()}
+                {r.clamped && (
+                  <span className="ml-1" title="Exceeds 14,000 rpm limit — clamp to machine max">⚠</span>
+                )}
+              </td>
+              <td className={td}>{r.fz.toFixed(2)}</td>
+              <td className={td}>{r.f.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </CardShell>
+  );
+}
+
+// ── Cheat Sheet 3 — Reamer HSS ─────────────────────────────────────────────
+
+const REAMER_AL = [
+  { d: "D6",  s: 3180, fpr: 0.15, f: 477 },
+  { d: "D8",  s: 2390, fpr: 0.15, f: 358 },
+  { d: "D10", s: 1910, fpr: 0.15, f: 286 },
+  { d: "D12", s: 1590, fpr: 0.15, f: 238 },
+] as const;
+
+const REAMER_STEEL = [
+  { d: "D6",  s: 1330, fpr: 0.10, f: 133 },
+  { d: "D8",  s: 990,  fpr: 0.10, f: 99  },
+  { d: "D10", s: 800,  fpr: 0.10, f: 80  },
+  { d: "D12", s: 660,  fpr: 0.10, f: 66  },
+] as const;
+
+function ReamerSubTable({ rows, label, params }: {
+  rows: readonly { d: string; s: number; fpr: number; f: number }[];
+  label: string;
+  params: string;
+}) {
+  return (
+    <div className="flex-1 min-w-[240px]">
+      <div className="px-3 py-1.5 bg-gray-100 border-b text-xs font-semibold text-gray-600 uppercase tracking-wider">
+        {label} <span className="font-normal text-gray-400 normal-case">— {params}</span>
+      </div>
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            {["D (mm)", "S (rpm)", "fpr (mm/rev)", "F (mm/min)"].map((h) => (
+              <th key={h} className={th}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {rows.map((r) => (
+            <tr key={r.d} className="hover:bg-gray-50">
+              <td className={tdL}>{r.d}</td>
+              <td className={td}>{r.s.toLocaleString()}</td>
+              <td className={td}>{r.fpr.toFixed(2)}</td>
+              <td className={td}>{r.f}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ReamerCheatSheet() {
+  return (
+    <CardShell
+      title="Reamer HSS — Starting Parameters"
+      footer="Pre-drill to H7 tolerance. Use flood coolant. 0.1–0.3mm stock on diameter for finishing."
+    >
+      <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
+        <ReamerSubTable rows={REAMER_AL}    label="Aluminium" params="Vc=60 m/min, fpr=0.15 mm/rev" />
+        <ReamerSubTable rows={REAMER_STEEL} label="Steel"     params="Vc=25 m/min, fpr=0.10 mm/rev" />
+      </div>
+    </CardShell>
+  );
+}
+
+// ── Main export ────────────────────────────────────────────────────────────
+
 export function ReferenceTab() {
   return (
     <div className="space-y-0">
@@ -193,6 +384,9 @@ export function ReferenceTab() {
       </div>
 
       <DeffCalculator />
+      <BallnoseCheatSheet />
+      <TipRadCheatSheet />
+      <ReamerCheatSheet />
     </div>
   );
 }
