@@ -19,7 +19,7 @@ export const TOOL_TYPE_DEFAULTS: Record<string, { vc: number; fz: number; z: num
   FACE_MILL: { vc: 600,  fz: 0.15, z: 3 },
   END_MILL:  { vc: 300,  fz: 0.10, z: 3 },
   TIP_RAD:   { vc: 400,  fz: 0.10, z: 3 },
-  BALL_NOSE: { vc: 600,  fz: 0.08, z: 2 },
+  BALL_NOSE: { vc: 275,  fz: 0.03, z: 2 },
 };
 
 /** Machines that support numeric RPM limits. "Both" is a library tag only. */
