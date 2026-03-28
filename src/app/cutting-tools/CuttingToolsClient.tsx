@@ -22,11 +22,12 @@ import {
 } from "./calc";
 import { SetupCard } from "./SetupCard";
 import { usePresets } from "./usePresets";
+import { MrrComparator } from "./MrrComparator";
 
 // ── Local types (library/UI only) ──────────────────────────────────────────
 
 type Machine = "Danusys" | "Hurco" | "Both";
-type Tab     = "library" | "calculator" | "compare";
+type Tab     = "library" | "calculator" | "compare" | "comparator";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -295,14 +296,17 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
       </div>
 
       {/* Tab nav */}
-      <div className="flex items-center border-b">
-        {(["library", "calculator", "compare"] as const).map((t) => (
+      <div className="flex items-center border-b overflow-x-auto">
+        {(["library", "calculator", "compare", "comparator"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               tab === t ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            {t === "library" ? "Library" : t === "calculator" ? "Calculator" : "Compare Setups"}
+            {t === "library"     ? "Library"
+           : t === "calculator"  ? "Calculator"
+           : t === "compare"     ? "Compare Setups"
+           :                       "MRR Comparator"}
           </button>
         ))}
       </div>
@@ -703,6 +707,11 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
 
         </div>
       )}
+      {/* ══ MRR Comparator tab ══ */}
+      {tab === "comparator" && (
+        <MrrComparator tools={tools} />
+      )}
+
     </div>
   );
 }

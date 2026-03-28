@@ -124,6 +124,75 @@ export function calcSetupResult(s: Setup): SetupResult | null {
   return { idealRpm, clamped, actualRpm, maxRpm, feed, mrr };
 }
 
+/** One slot in the MRR Comparator — bidirectional speed input (Vc or S). */
+export interface ComparatorSlot {
+  id:        string;
+  name:      string;
+  toolId:    string;
+  D:         string;
+  z:         string;
+  machine:   CalcMachine;
+  speedMode: "vc" | "s";
+  vc:        string;   // input when speedMode === "vc"
+  s:         string;   // input when speedMode === "s"
+  fz:        string;
+  ap:        string;
+  ae:        string;
+}
+
+/** Computed result for one Comparator slot — all values resolved. */
+export interface ComparatorResult {
+  idealRpm:  number;
+  clamped:   boolean;
+  actualRpm: number;
+  maxRpm:    number;
+  vc:        number;
+  feed:      number;
+  fz:        number;
+  mrr:       number | null;
+}
+
+/**
+ * Compute all outputs for a Comparator slot.
+ * Handles Vc→S and S→Vc input paths.
+ * Returns null when required inputs are missing or non-positive.
+ */
+export function calcComparatorResult(slot: ComparatorSlot): ComparatorResult | null {
+  const D = Number(slot.D);
+  const z = Number(slot.z);
+  if (D <= 0 || z <= 0) return null;
+
+  const maxRpm = MACHINE_MAX_RPM[slot.machine];
+
+  let idealRpm: number;
+  let vc: number;
+
+  if (slot.speedMode === "vc") {
+    const vcIn = Number(slot.vc);
+    if (!vcIn) return null;
+    vc       = vcIn;
+    idealRpm = calcRpm(vcIn, D);              // S = (Vc×1000)/(π×D)
+  } else {
+    const sIn = Number(slot.s);
+    if (!sIn) return null;
+    idealRpm = sIn;
+    vc       = calcVc(sIn, D);               // Vc = (S×π×D)/1000
+  }
+
+  const clamped   = idealRpm > maxRpm;
+  const actualRpm = clamped ? maxRpm : idealRpm;
+
+  const fzIn = Number(slot.fz);
+  if (!fzIn) return null;
+
+  const feed = calcFeed(fzIn, z, actualRpm); // F = Fz×Z×S_actual
+  const ap   = Number(slot.ap);
+  const ae   = Number(slot.ae);
+  const mrr  = ap > 0 && ae > 0 ? calcMrr(ae, ap, feed) : null;
+
+  return { idealRpm, clamped, actualRpm, maxRpm, vc, feed, fz: fzIn, mrr };
+}
+
 // ── Clamp helpers ──────────────────────────────────────────────────────────
 
 /** How much idealRpm exceeds the machine max, in percent. 0 if not clamped. */

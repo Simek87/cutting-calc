@@ -43,9 +43,8 @@ export function SetupCard({
   const clampPct     = result ? getClampPct(result) : 0;
   const heavyClamped = result ? isHeavilyClamped(result) : false;
 
-  const [saveOpen,        setSaveOpen]        = useState(false);
-  const [saveName,        setSaveName]        = useState("");
-  const [selectedPreset,  setSelectedPreset]  = useState("");
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
 
   const handleLoadPreset = (id: string) => {
     const p = presets.find((x) => x.id === id);
@@ -99,10 +98,10 @@ export function SetupCard({
         )}
       </div>
 
-      {/* Preset strip */}
-      <div className="border-b bg-gray-50 px-3 py-1.5 flex items-center gap-2 min-h-[34px]">
+      {/* Preset strip — pill buttons: click name to load, × to delete (no auto-load) */}
+      <div className="border-b bg-gray-50 px-3 py-1.5 space-y-1.5">
         {saveOpen ? (
-          <>
+          <div className="flex items-center gap-1">
             <input
               autoFocus
               value={saveName}
@@ -113,37 +112,34 @@ export function SetupCard({
             />
             <button onClick={handleSave} className="text-xs text-green-700 hover:text-green-900 font-bold shrink-0" title="Confirm save">✓</button>
             <button onClick={() => setSaveOpen(false)} className="text-xs text-gray-400 hover:text-gray-700 shrink-0" title="Cancel">✕</button>
-          </>
+          </div>
         ) : (
           <>
             {presets.length > 0 && (
-              <>
-                <select
-                  value={selectedPreset}
-                  onChange={(e) => { setSelectedPreset(e.target.value); if (e.target.value) handleLoadPreset(e.target.value); }}
-                  className="flex-1 border rounded px-2 py-0.5 text-xs min-w-0 bg-white"
-                >
-                  <option value="">— load preset —</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                {selectedPreset && (
-                  <button
-                    onClick={() => { onDeletePreset(selectedPreset); setSelectedPreset(""); }}
-                    className="text-gray-400 hover:text-red-500 text-xs shrink-0"
-                    title="Delete this preset"
-                  >✕</button>
-                )}
-              </>
+              <div className="flex flex-wrap gap-1">
+                {presets.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-0.5 bg-white border border-gray-200 rounded px-1.5 py-0.5">
+                    <button
+                      onClick={() => handleLoadPreset(p.id)}
+                      className="text-xs text-gray-700 hover:text-indigo-700 leading-none"
+                      title={`Load "${p.name}"`}
+                    >{p.name}</button>
+                    <button
+                      onClick={() => onDeletePreset(p.id)}
+                      className="text-gray-300 hover:text-red-500 text-xs leading-none ml-0.5"
+                      title={`Delete "${p.name}"`}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
             )}
-            <button
-              onClick={() => { setSaveName(setup.name); setSaveOpen(true); }}
-              className="text-xs text-gray-500 hover:text-gray-800 shrink-0 ml-auto"
-              title="Save current setup as preset"
-            >
-              💾 save
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={() => { setSaveName(setup.name); setSaveOpen(true); }}
+                className="text-xs text-gray-500 hover:text-gray-800"
+                title="Save current setup as preset"
+              >💾 save</button>
+            </div>
           </>
         )}
       </div>
