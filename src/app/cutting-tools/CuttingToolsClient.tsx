@@ -6,6 +6,7 @@ import {
   type Setup,
   MACHINE_MAX_RPM,
   TOOL_TYPE_LABELS,
+  TOOL_TYPE_DEFAULTS,
   TOOL_TYPES,
   calcSetupResult,
   getClampPct,
@@ -356,7 +357,11 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-0.5">Type</label>
-                  <select value={form.toolType} onChange={(e) => setF("toolType", e.target.value)} className="w-full border rounded px-2 py-1 text-sm">
+                  <select value={form.toolType} onChange={(e) => {
+                    const tt = e.target.value;
+                    const d  = TOOL_TYPE_DEFAULTS[tt];
+                    setForm((p) => ({ ...p, toolType: tt, ...(d && { vc: String(d.vc), fz: String(d.fz), flutes: String(d.z) }) }));
+                  }} className="w-full border rounded px-2 py-1 text-sm">
                     <option value="">— Select type —</option>
                     {TOOL_TYPES.map((tt) => (
                       <option key={tt} value={tt}>{TOOL_TYPE_LABELS[tt]}</option>

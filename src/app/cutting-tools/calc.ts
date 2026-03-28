@@ -14,6 +14,14 @@ export const TOOL_TYPE_LABELS: Record<string, string> = {
 /** Ordered list of known tool type values (for dropdowns and filters). */
 export const TOOL_TYPES = ["FACE_MILL", "END_MILL", "TIP_RAD", "BALL_NOSE"] as const;
 
+/** Default cutting parameters per tool type — applied on type selection in the Add Tool form. */
+export const TOOL_TYPE_DEFAULTS: Record<string, { vc: number; fz: number; z: number }> = {
+  FACE_MILL: { vc: 600,  fz: 0.15, z: 3 },
+  END_MILL:  { vc: 300,  fz: 0.10, z: 3 },
+  TIP_RAD:   { vc: 400,  fz: 0.10, z: 3 },
+  BALL_NOSE: { vc: 600,  fz: 0.08, z: 2 },
+};
+
 /** Machines that support numeric RPM limits. "Both" is a library tag only. */
 export type CalcMachine = "Danusys" | "Hurco";
 
