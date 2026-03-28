@@ -96,9 +96,10 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
   // ── Filtered library tools ────────────────────────────────────────────────
 
   const filtered = useMemo(() =>
-    machineFilter === "All"
+    (machineFilter === "All"
       ? tools
-      : tools.filter((t) => t.machine === machineFilter || t.machine === "Both"),
+      : tools.filter((t) => t.machine === machineFilter || t.machine === "Both")
+    ).sort((a, b) => b.diameter - a.diameter),
     [tools, machineFilter]
   );
 
