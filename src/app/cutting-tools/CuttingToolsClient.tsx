@@ -5,6 +5,8 @@ import {
   type CuttingTool,
   type Setup,
   MACHINE_MAX_RPM,
+  TOOL_TYPE_LABELS,
+  TOOL_TYPES,
   calcSetupResult,
   getClampPct,
   isHeavilyClamped,
@@ -64,6 +66,7 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
   const [tools, setTools]                 = useState<CuttingTool[]>(initialTools);
   const [tab, setTab]                     = useState<Tab>("library");
   const [machineFilter, setMachineFilter] = useState<Machine | "All">("All");
+  const [typeFilter, setTypeFilter]       = useState<string | "All">("All");
   const [showForm, setShowForm]           = useState(false);
   const [editingId, setEditingId]         = useState<string | null>(null);
   const [form, setForm]                   = useState(emptyForm());
@@ -96,11 +99,11 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
   // ── Filtered library tools ────────────────────────────────────────────────
 
   const filtered = useMemo(() =>
-    (machineFilter === "All"
-      ? tools
-      : tools.filter((t) => t.machine === machineFilter || t.machine === "Both")
-    ).sort((a, b) => b.diameter - a.diameter),
-    [tools, machineFilter]
+    tools
+      .filter((t) => machineFilter === "All" || t.machine === machineFilter || t.machine === "Both")
+      .filter((t) => typeFilter === "All" || t.toolType === typeFilter)
+      .sort((a, b) => b.diameter - a.diameter),
+    [tools, machineFilter, typeFilter]
   );
 
   // ── Standalone calculator result (bidirectional) ──────────────────────────
@@ -353,7 +356,12 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-0.5">Type</label>
-                  <input value={form.toolType} onChange={(e) => setF("toolType", e.target.value)} className="w-full border rounded px-2 py-1 text-sm" placeholder="End mill, drill…" />
+                  <select value={form.toolType} onChange={(e) => setF("toolType", e.target.value)} className="w-full border rounded px-2 py-1 text-sm">
+                    <option value="">— Select type —</option>
+                    {TOOL_TYPES.map((tt) => (
+                      <option key={tt} value={tt}>{TOOL_TYPE_LABELS[tt]}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-0.5">Machine *</label>
@@ -438,6 +446,22 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 mr-1">Type:</span>
+            {(["All", ...TOOL_TYPES] as const).map((tt) => {
+              const count = tt === "All"
+                ? tools.length
+                : tools.filter((t) => t.toolType === tt).length;
+              const label = tt === "All" ? `All (${count})` : `${TOOL_TYPE_LABELS[tt]} (${count})`;
+              return (
+                <button key={tt} onClick={() => setTypeFilter(tt)}
+                  className={`text-xs px-2.5 py-1 rounded border font-medium transition-colors ${
+                    typeFilter === tt ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+                  }`}
+                >{label}</button>
+              );
+            })}
+          </div>
 
           <div className="border rounded-lg overflow-hidden bg-white">
             <div className="overflow-x-auto">
@@ -461,7 +485,7 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
                   {filtered.map((t) => (
                     <tr key={t.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{t.name}</td>
-                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{t.toolType ?? "—"}</td>
+                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{t.toolType ? (TOOL_TYPE_LABELS[t.toolType] ?? t.toolType) : "—"}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span className={`px-1.5 py-0.5 rounded border text-xs font-medium ${MACHINE_COLORS[t.machine]}`}>{t.machine}</span>
                       </td>

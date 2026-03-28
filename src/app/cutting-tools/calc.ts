@@ -3,6 +3,17 @@
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+/** Human-readable labels for tool type DB values. */
+export const TOOL_TYPE_LABELS: Record<string, string> = {
+  FACE_MILL: "Głowica",
+  END_MILL:  "End Mill",
+  TIP_RAD:   "TipRad",
+  BALL_NOSE: "Ballnose",
+};
+
+/** Ordered list of known tool type values (for dropdowns and filters). */
+export const TOOL_TYPES = ["FACE_MILL", "END_MILL", "TIP_RAD", "BALL_NOSE"] as const;
+
 /** Machines that support numeric RPM limits. "Both" is a library tag only. */
 export type CalcMachine = "Danusys" | "Hurco";
 
