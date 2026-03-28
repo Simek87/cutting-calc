@@ -230,44 +230,65 @@ function BallnoseCheatSheet() {
 
 // ── Cheat Sheet 2 — TipRad Finishing ──────────────────────────────────────
 
-const TR_ROWS = [
-  { tool: "D6R1",    d: 6,  r: 1.0, ap: 0.2, ae: 0.3, s: 21220, clamped: true,  fz: 0.08, f: 5093 },
-  { tool: "D8R1",    d: 8,  r: 1.0, ap: 0.2, ae: 0.3, s: 15920, clamped: false, fz: 0.08, f: 3821 },
-  { tool: "D10R1",   d: 10, r: 1.0, ap: 0.2, ae: 0.3, s: 12730, clamped: false, fz: 0.08, f: 3055 },
-  { tool: "D12R1",   d: 12, r: 1.0, ap: 0.2, ae: 0.3, s: 10610, clamped: false, fz: 0.08, f: 2546 },
-  { tool: "D12R1.5", d: 12, r: 1.5, ap: 0.2, ae: 0.3, s: 10610, clamped: false, fz: 0.08, f: 2546 },
-  { tool: "D12R2",   d: 12, r: 2.0, ap: 0.2, ae: 0.3, s: 10610, clamped: false, fz: 0.08, f: 2546 },
+const TR_IDEAL: Record<string, number> = { "D6R": 21221, "D8R": 15915, "D10R": 12732, "D12R": 10610 };
+
+const TR_HURCO = [
+  { tool: "D6R",  ap: 0.2, ae: 0.3, s: 14000, clamped: true,  vcAct: 263.9, fz: 0.08, f: 3360 },
+  { tool: "D8R",  ap: 0.2, ae: 0.3, s: 14000, clamped: true,  vcAct: 351.9, fz: 0.08, f: 3360 },
+  { tool: "D10R", ap: 0.2, ae: 0.3, s: 12732, clamped: false, vcAct: 400.0, fz: 0.08, f: 3056 },
+  { tool: "D12R", ap: 0.2, ae: 0.3, s: 10610, clamped: false, vcAct: 400.0, fz: 0.08, f: 2546 },
 ] as const;
 
+const TR_DANUSYS = [
+  { tool: "D6R",  ap: 0.2, ae: 0.3, s: 4250, clamped: true, vcAct: 80.1,  fz: 0.08, f: 1020 },
+  { tool: "D8R",  ap: 0.2, ae: 0.3, s: 4250, clamped: true, vcAct: 106.8, fz: 0.08, f: 1020 },
+  { tool: "D10R", ap: 0.2, ae: 0.3, s: 4250, clamped: true, vcAct: 133.5, fz: 0.08, f: 1020 },
+  { tool: "D12R", ap: 0.2, ae: 0.3, s: 4250, clamped: true, vcAct: 160.2, fz: 0.08, f: 1020 },
+] as const;
+
+type TRMachine = "Hurco" | "Danusys";
+
 function TipRadCheatSheet() {
+  const [machine, setMachine] = useState<TRMachine>("Hurco");
+  const rows = machine === "Hurco" ? TR_HURCO : TR_DANUSYS;
+
   return (
     <CardShell
       title="TipRad Finishing — Aluminium (Z=3)"
-      subtitle="Vc=400 m/min on nominal D, ap=0.2mm, ae=0.3mm, Fz=0.08"
-      footer="ae=0.3mm fixed stepover. Adjust Fz if surface finish requires it."
+      footer="Vc=400 m/min target on nominal D, ap=0.2mm, ae=0.3mm fixed stepover. ⚠ = RPM clamped to machine limit, Vc actual < 400 m/min."
     >
+      <div className="px-4 py-2.5 border-b flex items-center gap-2">
+        {(["Hurco", "Danusys"] as TRMachine[]).map((m) => (
+          <button key={m} onClick={() => setMachine(m)}
+            className={`text-xs px-2.5 py-1 rounded border font-medium transition-colors ${
+              machine === m ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+            }`}
+          >
+            {m === "Hurco" ? "Hurco (14,000 rpm)" : "Danusys (4,250 rpm)"}
+          </button>
+        ))}
+      </div>
       <table className="w-full text-sm">
         <thead className="bg-gray-50 border-b">
           <tr>
-            {["Tool", "D (mm)", "R (mm)", "ap (mm)", "ae (mm)", "S (rpm)", "Fz (mm)", "F (mm/min)"].map((h) => (
+            {["Tool", "ap (mm)", "ae (mm)", "S (rpm)", "Vc actual (m/min)", "Fz (mm/tooth)", "F (mm/min)"].map((h) => (
               <th key={h} className={th}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {TR_ROWS.map((r) => (
+          {rows.map((r) => (
             <tr key={r.tool} className={r.clamped ? "bg-amber-50" : "hover:bg-gray-50"}>
               <td className={tdL}>{r.tool}</td>
-              <td className={td}>{r.d}</td>
-              <td className={td}>{r.r.toFixed(1)}</td>
               <td className={td}>{r.ap.toFixed(1)}</td>
               <td className={td}>{r.ae.toFixed(1)}</td>
               <td className={`${td} ${r.clamped ? "text-amber-700 font-semibold" : "text-gray-700"}`}>
                 {r.s.toLocaleString()}
                 {r.clamped && (
-                  <span className="ml-1" title="Exceeds 14,000 rpm limit — clamp to machine max">⚠</span>
+                  <span className="ml-1" title={`RPM clamped to machine limit — ideal S=${TR_IDEAL[r.tool]?.toLocaleString()} rpm`}>⚠</span>
                 )}
               </td>
+              <td className={`${td} ${r.clamped ? "text-amber-700" : "text-gray-700"}`}>{r.vcAct.toFixed(1)}</td>
               <td className={td}>{r.fz.toFixed(2)}</td>
               <td className={td}>{r.f.toLocaleString()}</td>
             </tr>
