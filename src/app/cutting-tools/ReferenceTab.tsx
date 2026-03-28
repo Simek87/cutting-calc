@@ -315,15 +315,30 @@ const REAMER_STEEL = [
   { d: "D12", s: 660,  fpr: 0.10, f: 66  },
 ] as const;
 
-function ReamerSubTable({ rows, label, params }: {
-  rows: readonly { d: string; s: number; fpr: number; f: number }[];
-  label: string;
-  params: string;
-}) {
+type ReamerMaterial = "Aluminium" | "Steel";
+
+const REAMER_FOOTER: Record<ReamerMaterial, string> = {
+  Aluminium: "Vc=60 m/min. Pre-drill to H7 tolerance. 0.1–0.3mm stock on diameter. Flood coolant.",
+  Steel:     "Vc=25 m/min. Pre-drill to H7 tolerance. 0.1–0.3mm stock on diameter. Flood coolant, reduce Vc for stainless.",
+};
+
+function ReamerCheatSheet() {
+  const [material, setMaterial] = useState<ReamerMaterial>("Aluminium");
+  const rows = material === "Aluminium" ? REAMER_AL : REAMER_STEEL;
+
   return (
-    <div className="flex-1 min-w-[240px]">
-      <div className="px-3 py-1.5 bg-gray-100 border-b text-xs font-semibold text-gray-600 uppercase tracking-wider">
-        {label} <span className="font-normal text-gray-400 normal-case">— {params}</span>
+    <CardShell
+      title="Reamer HSS — Starting Parameters"
+      footer={REAMER_FOOTER[material]}
+    >
+      <div className="px-4 py-2.5 border-b flex items-center gap-2">
+        {(["Aluminium", "Steel"] as ReamerMaterial[]).map((m) => (
+          <button key={m} onClick={() => setMaterial(m)}
+            className={`text-xs px-2.5 py-1 rounded border font-medium transition-colors ${
+              material === m ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+            }`}
+          >{m}</button>
+        ))}
       </div>
       <table className="w-full text-sm">
         <thead className="bg-gray-50 border-b">
@@ -344,20 +359,6 @@ function ReamerSubTable({ rows, label, params }: {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function ReamerCheatSheet() {
-  return (
-    <CardShell
-      title="Reamer HSS — Starting Parameters"
-      footer="Pre-drill to H7 tolerance. Use flood coolant. 0.1–0.3mm stock on diameter for finishing."
-    >
-      <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-gray-100">
-        <ReamerSubTable rows={REAMER_AL}    label="Aluminium" params="Vc=60 m/min, fpr=0.15 mm/rev" />
-        <ReamerSubTable rows={REAMER_STEEL} label="Steel"     params="Vc=25 m/min, fpr=0.10 mm/rev" />
-      </div>
     </CardShell>
   );
 }
