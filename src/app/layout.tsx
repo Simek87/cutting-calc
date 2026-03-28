@@ -46,7 +46,7 @@ export default function RootLayout({
             Suppliers
           </Link>
           <a href="https://cutting-calc.vercel.app/cutting-tools" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 hover:text-gray-800">
-            Cutting Tools
+            Milling Calc
           </a>
         </nav>
         {children}
