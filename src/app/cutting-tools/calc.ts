@@ -79,9 +79,19 @@ export function calcRpm(vc: number, D: number): number {
   return (vc * 1000) / (Math.PI * D);
 }
 
+/** Vc = (S × π × D) / 1000   — inverse of calcRpm */
+export function calcVc(s: number, D: number): number {
+  return (s * Math.PI * D) / 1000;
+}
+
 /** F = Fz × Z × S_actual */
 export function calcFeed(fz: number, z: number, rpm: number): number {
   return fz * z * rpm;
+}
+
+/** Fz = F / (Z × S_actual)   — inverse of calcFeed */
+export function calcFz(f: number, z: number, rpm: number): number {
+  return f / (z * rpm);
 }
 
 /** MRR = (ae × ap × F) / 1000   [cm³/min] */
@@ -132,10 +142,16 @@ export function isHeavilyClamped(r: SetupResult): boolean {
 /** Whole-number rpm with locale thousands separator: 14,000 */
 export const fmtRpm  = (n: number): string => Math.round(n).toLocaleString();
 
-/** Feed to 1 decimal place: 740.0 */
+/** Cutting speed to 1 decimal: 80.0 m/min */
+export const fmtVc   = (n: number): string => n.toFixed(1);
+
+/** Feed rate to 1 decimal place: 740.0 mm/min */
 export const fmtFeed = (n: number): string => n.toFixed(1);
 
-/** MRR to 1 decimal place: 5.9 */
+/** Feed per tooth to 3 decimal places: 0.050 mm/tooth */
+export const fmtFz   = (n: number): string => n.toFixed(3);
+
+/** MRR to 1 decimal place: 5.9 cm³/min */
 export const fmtMrr  = (n: number): string => n.toFixed(1);
 
 /** Signed percentage to 1 decimal: +12.3% or −5.1% */

@@ -9,10 +9,14 @@ import {
   getClampPct,
   isHeavilyClamped,
   calcRpm,
+  calcVc,
   calcFeed,
+  calcFz as calcFzFromF,
   calcMrr,
   fmtRpm,
+  fmtVc,
   fmtFeed,
+  fmtFz,
   fmtMrr,
   fmtPct,
 } from "./calc";
@@ -65,9 +69,16 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
   const nextId                            = useRef(3);
 
   // Standalone calculator state
-  const [calc, setCalc] = useState({
-    D: "", z: "", vc: "", fz: "", ap: "", ae: "",
-    machine: "Hurco" as Machine,
+  const [calc, setCalc] = useState<{
+    D: string; z: string; machine: "Danusys" | "Hurco";
+    speedMode: "vc" | "s"; vc: string; s: string;
+    feedMode:  "fz" | "f"; fz: string; f: string;
+    ap: string; ae: string;
+  }>({
+    D: "", z: "", machine: "Hurco",
+    speedMode: "vc", vc: "", s: "",
+    feedMode:  "fz", fz: "", f: "",
+    ap: "", ae: "",
   });
 
   // Saved presets (localStorage)
@@ -88,24 +99,55 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
     [tools, machineFilter]
   );
 
-  // ── Standalone calculator result ──────────────────────────────────────────
+  // ── Standalone calculator result (bidirectional) ──────────────────────────
 
   const calcResult = useMemo(() => {
-    const D  = Number(calc.D);
-    const z  = Number(calc.z);
-    const vc = Number(calc.vc);
-    const fz = Number(calc.fz);
-    const ap = Number(calc.ap);
-    const ae = Number(calc.ae);
-    if (D <= 0 || z <= 0 || !vc || !fz) return null;
+    const D = Number(calc.D);
+    const z = Number(calc.z);
+    if (D <= 0 || z <= 0) return null;
 
-    const maxRpm    = MACHINE_MAX_RPM[calc.machine as "Danusys" | "Hurco"] ?? 14000;
-    const idealRpm  = calcRpm(vc, D);
+    const maxRpm = MACHINE_MAX_RPM[calc.machine];
+
+    // ── Speed: Vc→S or S→Vc ────────────────────────────────────────────────
+    let idealRpm: number;
+    let vc: number;
+
+    if (calc.speedMode === "vc") {
+      const vcIn = Number(calc.vc);
+      if (!vcIn) return null;
+      vc       = vcIn;
+      idealRpm = calcRpm(vcIn, D);           // S = (Vc×1000)/(π×D)
+    } else {
+      const sIn = Number(calc.s);
+      if (!sIn) return null;
+      idealRpm = sIn;
+      vc       = calcVc(sIn, D);             // Vc = (S×π×D)/1000
+    }
+
     const clamped   = idealRpm > maxRpm;
     const actualRpm = clamped ? maxRpm : idealRpm;
-    const f         = calcFeed(fz, z, actualRpm);
-    const mrr       = ap > 0 && ae > 0 ? calcMrr(ae, ap, f) : null;
-    return { idealRpm, clamped, actualRpm, maxRpm, f, mrr };
+
+    // ── Feed: Fz→F or F→Fz ─────────────────────────────────────────────────
+    let feed: number;
+    let fz: number;
+
+    if (calc.feedMode === "fz") {
+      const fzIn = Number(calc.fz);
+      if (!fzIn) return null;
+      fz   = fzIn;
+      feed = calcFeed(fzIn, z, actualRpm);   // F = Fz×Z×S_actual
+    } else {
+      const fIn = Number(calc.f);
+      if (!fIn || actualRpm === 0) return null;
+      feed = fIn;
+      fz   = calcFzFromF(fIn, z, actualRpm); // Fz = F/(Z×S_actual)
+    }
+
+    const ap  = Number(calc.ap);
+    const ae  = Number(calc.ae);
+    const mrr = ap > 0 && ae > 0 ? calcMrr(ae, ap, feed) : null;
+
+    return { idealRpm, clamped, actualRpm, maxRpm, vc, feed, fz, mrr };
   }, [calc]);
 
   // ── Compare setup results ─────────────────────────────────────────────────
@@ -163,14 +205,20 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
   };
 
   const loadIntoCalc = (t: CuttingTool) => {
+    const hasVc   = t.vc   != null;
+    const hasFz   = t.fz   != null;
     setCalc({
-      D:  String(t.diameter),
-      z:  String(t.flutes),
-      vc: t.vc  != null ? String(t.vc)  : "",
-      fz: t.fz  != null ? String(t.fz)  : "",
-      ap: t.ap  != null ? String(t.ap)  : "",
-      ae: t.ae  != null ? String(t.ae)  : "",
-      machine: t.machine === "Both" ? "Hurco" : t.machine,
+      D:         String(t.diameter),
+      z:         String(t.flutes),
+      machine:   t.machine === "Both" ? "Hurco" : t.machine,
+      speedMode: hasVc              ? "vc" : t.rpm  != null ? "s"  : "vc",
+      vc:        hasVc              ? String(t.vc)  : "",
+      s:         !hasVc && t.rpm != null ? String(t.rpm) : "",
+      feedMode:  hasFz              ? "fz" : t.feed != null ? "f"  : "fz",
+      fz:        hasFz              ? String(t.fz)  : "",
+      f:         !hasFz && t.feed != null ? String(t.feed) : "",
+      ap:        t.ap != null ? String(t.ap) : "",
+      ae:        t.ae != null ? String(t.ae) : "",
     });
     setTab("calculator");
   };
@@ -397,61 +445,157 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
         <div className="border rounded-lg bg-white overflow-hidden">
           <div className="bg-gray-900 px-4 py-2.5">
             <span className="text-sm font-bold text-white uppercase tracking-wider">Calculator</span>
-            <span className="text-xs text-gray-400 ml-2 font-normal">rpm · feed · MRR</span>
+            <span className="text-xs text-gray-400 ml-2 font-normal">bidirectional · rpm · feed · MRR</span>
           </div>
           <div className="p-4 space-y-4">
-            <div className="grid grid-cols-7 gap-3">
+
+            {/* ── Geometry + Machine ── */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Machine</label>
-                <select value={calc.machine} onChange={(e) => setC("machine", e.target.value)} className="w-full border rounded px-2 py-1.5 text-sm">
-                  <option value="Danusys">Danusys (max {MACHINE_MAX_RPM.Danusys.toLocaleString()} rpm)</option>
-                  <option value="Hurco">Hurco (max {MACHINE_MAX_RPM.Hurco.toLocaleString()} rpm)</option>
+                <select
+                  value={calc.machine}
+                  onChange={(e) => setCalc((p) => ({ ...p, machine: e.target.value as "Danusys" | "Hurco" }))}
+                  className="w-full border rounded px-2 py-1.5 text-sm"
+                >
+                  <option value="Danusys">Danusys — max {MACHINE_MAX_RPM.Danusys.toLocaleString()} rpm</option>
+                  <option value="Hurco">Hurco — max {MACHINE_MAX_RPM.Hurco.toLocaleString()} rpm</option>
                 </select>
               </div>
-              {[
-                { k: "D",  label: "D (mm)",       ph: "8",    title: "Tool diameter" },
-                { k: "z",  label: "Z (flutes)",    ph: "4",    title: "Number of flutes" },
-                { k: "vc", label: "Vc (m/min)",    ph: "80",   title: "Cutting speed" },
-                { k: "fz", label: "Fz (mm/tooth)", ph: "0.05", title: "Feed per tooth" },
-                { k: "ap", label: "ap (mm)",       ph: "5",    title: "Axial depth of cut" },
-                { k: "ae", label: "ae (mm)",       ph: "2",    title: "Radial depth of cut" },
-              ].map(({ k, label, ph, title }) => (
-                <div key={k}>
-                  <label className="block text-xs text-gray-500 mb-1" title={title}>{label}</label>
-                  <input type="number" step="any" min="0" value={(calc as Record<string, string>)[k]} onChange={(e) => setC(k, e.target.value)} placeholder={ph} className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
-                </div>
-              ))}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1" title="Tool diameter">D (mm)</label>
+                <input type="number" step="any" min="0" value={calc.D} onChange={(e) => setC("D", e.target.value)} placeholder="50" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1" title="Number of flutes">Z (flutes)</label>
+                <input type="number" step="1" min="1" value={calc.z} onChange={(e) => setC("z", e.target.value)} placeholder="3" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+              </div>
             </div>
+
+            {/* ── Speed section ── */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Speed</span>
+                <div className="flex rounded border overflow-hidden text-xs">
+                  <button
+                    onClick={() => setCalc((p) => ({ ...p, speedMode: "vc" }))}
+                    className={`px-3 py-0.5 ${calc.speedMode === "vc" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  >Vc → S</button>
+                  <button
+                    onClick={() => setCalc((p) => ({ ...p, speedMode: "s" }))}
+                    className={`px-3 py-0.5 border-l ${calc.speedMode === "s" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  >S → Vc</button>
+                </div>
+              </div>
+              {calc.speedMode === "vc" ? (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Vc — cutting speed (m/min)</label>
+                  <input type="number" step="any" min="0" value={calc.vc} onChange={(e) => setC("vc", e.target.value)} placeholder="80" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">S — spindle speed (rpm)</label>
+                  <input type="number" step="any" min="0" value={calc.s} onChange={(e) => setC("s", e.target.value)} placeholder="500" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+                </div>
+              )}
+            </div>
+
+            {/* ── Feed section ── */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Feed</span>
+                <div className="flex rounded border overflow-hidden text-xs">
+                  <button
+                    onClick={() => setCalc((p) => ({ ...p, feedMode: "fz" }))}
+                    className={`px-3 py-0.5 ${calc.feedMode === "fz" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  >Fz → F</button>
+                  <button
+                    onClick={() => setCalc((p) => ({ ...p, feedMode: "f" }))}
+                    className={`px-3 py-0.5 border-l ${calc.feedMode === "f" ? "bg-gray-900 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                  >F → Fz</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {calc.feedMode === "fz" ? (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Fz — feed per tooth (mm/tooth)</label>
+                    <input type="number" step="any" min="0" value={calc.fz} onChange={(e) => setC("fz", e.target.value)} placeholder="0.05" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">F — feed rate (mm/min)</label>
+                    <input type="number" step="any" min="0" value={calc.f} onChange={(e) => setC("f", e.target.value)} placeholder="150" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">ap — axial depth (mm)</label>
+                  <input type="number" step="any" min="0" value={calc.ap} onChange={(e) => setC("ap", e.target.value)} placeholder="3" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">ae — radial depth (mm)</label>
+                  <input type="number" step="any" min="0" value={calc.ae} onChange={(e) => setC("ae", e.target.value)} placeholder="40" className="w-full border rounded px-2 py-1.5 text-sm font-mono" />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Results ── */}
             {calcResult ? (
-              <div className="grid grid-cols-4 gap-3 pt-2 border-t">
-                <div className={`rounded p-3 ${calcResult.clamped ? "bg-amber-50 border border-amber-200" : "bg-gray-50"}`}>
-                  <div className="text-xs text-gray-500 mb-1">S — Ideal rpm</div>
-                  <div className="text-lg font-mono font-bold text-gray-800">{fmtRpm(calcResult.idealRpm)}</div>
-                  {calcResult.clamped && <div className="text-xs text-amber-700 mt-1">⚠ exceeds machine limit</div>}
-                </div>
-                <div className={`rounded p-3 ${calcResult.clamped ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
-                  <div className="text-xs text-gray-500 mb-1">S — Machine rpm {calcResult.clamped ? "(clamped)" : "(OK)"}</div>
-                  <div className={`text-lg font-mono font-bold ${calcResult.clamped ? "text-red-700" : "text-green-700"}`}>{fmtRpm(calcResult.actualRpm)}</div>
-                  <div className="text-xs text-gray-400 mt-1">max {calcResult.maxRpm.toLocaleString()} rpm</div>
-                </div>
-                <div className="bg-gray-50 rounded p-3">
-                  <div className="text-xs text-gray-500 mb-1">F — Feed {calcResult.clamped ? "(at machine rpm)" : ""}</div>
-                  <div className="text-lg font-mono font-bold text-gray-800">{fmtFeed(calcResult.f)}</div>
-                  <div className="text-xs text-gray-400 mt-1">mm/min</div>
-                </div>
-                <div className={`rounded p-3 ${calcResult.mrr != null ? "bg-gray-50" : "bg-gray-50 opacity-50"}`}>
-                  <div className="text-xs text-gray-500 mb-1">MRR</div>
-                  {calcResult.mrr != null
-                    ? <><div className="text-lg font-mono font-bold text-gray-800">{fmtMrr(calcResult.mrr)}</div><div className="text-xs text-gray-400 mt-1">cm³/min</div></>
-                    : <div className="text-sm text-gray-400 mt-1">enter ap + ae</div>
-                  }
+              <div className="border-t pt-3 space-y-2">
+                <div className="grid grid-cols-3 gap-3">
+                  {/* S ideal */}
+                  <div className={`rounded p-3 ${calcResult.clamped ? "bg-amber-50 border border-amber-200" : "bg-gray-50"}`}>
+                    <div className="text-xs text-gray-500 mb-1">S — theoretical</div>
+                    <div className="text-lg font-mono font-bold text-gray-800">{fmtRpm(calcResult.idealRpm)}</div>
+                    <div className="text-xs text-gray-400">rpm</div>
+                    {calcResult.clamped && <div className="text-xs text-amber-700 mt-1">⚠ exceeds machine max</div>}
+                  </div>
+                  {/* S actual */}
+                  <div className={`rounded p-3 ${calcResult.clamped ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
+                    <div className="text-xs text-gray-500 mb-1">S — actual {calcResult.clamped ? "(clamped)" : "(OK)"}</div>
+                    <div className={`text-lg font-mono font-bold ${calcResult.clamped ? "text-red-700" : "text-green-700"}`}>{fmtRpm(calcResult.actualRpm)}</div>
+                    <div className="text-xs text-gray-400">rpm · max {calcResult.maxRpm.toLocaleString()}</div>
+                  </div>
+                  {/* Vc — shown as computed when in S mode, or confirmed when in Vc mode */}
+                  <div className="bg-gray-50 rounded p-3">
+                    <div className="text-xs text-gray-500 mb-1">Vc {calc.speedMode === "s" ? "(computed)" : ""}</div>
+                    <div className="text-lg font-mono font-bold text-gray-800">{fmtVc(calcResult.vc)}</div>
+                    <div className="text-xs text-gray-400">m/min</div>
+                  </div>
+                  {/* F */}
+                  <div className="bg-gray-50 rounded p-3">
+                    <div className="text-xs text-gray-500 mb-1">F {calc.feedMode === "fz" ? "(computed)" : ""}{calcResult.clamped ? " — at clamped rpm" : ""}</div>
+                    <div className="text-lg font-mono font-bold text-gray-800">{fmtFeed(calcResult.feed)}</div>
+                    <div className="text-xs text-gray-400">mm/min</div>
+                  </div>
+                  {/* Fz — shown as computed when in F mode */}
+                  <div className="bg-gray-50 rounded p-3">
+                    <div className="text-xs text-gray-500 mb-1">Fz {calc.feedMode === "f" ? "(computed)" : ""}</div>
+                    <div className="text-lg font-mono font-bold text-gray-800">{fmtFz(calcResult.fz)}</div>
+                    <div className="text-xs text-gray-400">mm/tooth</div>
+                  </div>
+                  {/* MRR */}
+                  <div className={`rounded p-3 ${calcResult.mrr != null ? "bg-indigo-50 border border-indigo-200" : "bg-gray-50 opacity-60"}`}>
+                    <div className="text-xs text-gray-500 mb-1">MRR</div>
+                    {calcResult.mrr != null ? (
+                      <>
+                        <div className="text-lg font-mono font-bold text-indigo-700">{fmtMrr(calcResult.mrr)}</div>
+                        <div className="text-xs text-gray-400">cm³/min</div>
+                      </>
+                    ) : (
+                      <div className="text-sm text-gray-400 mt-1">enter ap + ae</div>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="py-3 text-sm text-gray-400 border-t">Enter D, Z, Vc and Fz to calculate.</div>
+              <div className="py-3 text-sm text-gray-400 border-t">
+                {calc.speedMode === "vc" ? "Enter D, Z, Vc" : "Enter D, Z, S"}{" "}
+                {calc.feedMode === "fz" ? "and Fz" : "and F"} to calculate.
+              </div>
             )}
+
             <div className="text-xs text-gray-400 font-mono pt-1 border-t">
-              S = (Vc × 1000) / (π × D)   |   F = Fz × Z × S_actual   |   MRR = (ae × ap × F) / 1000
+              S=(Vc·1000)/(π·D)  ·  Vc=(S·π·D)/1000  ·  F=Fz·Z·S  ·  Fz=F/(Z·S)  ·  MRR=(ae·ap·F)/1000
             </div>
           </div>
         </div>
