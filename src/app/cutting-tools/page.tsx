@@ -23,15 +23,16 @@ interface StarterTool {
 }
 
 const STARTER_TOOLS: StarterTool[] = [
-  // geometry-only starters (kept for backwards compatibility)
-  { name: "Face Mill D50 R2 Z3",   machine: "Both",    toolType: "FACE_MILL", diameter: 50, cornerRadius: 2,   flutes: 3 },
-  { name: "Face Mill D32 R0.8 Z4", machine: "Both",    toolType: "FACE_MILL", diameter: 32, cornerRadius: 0.8, flutes: 4 },
-  // full-param starters with real machining data
   { name: "50R2",   machine: "Hurco",   toolType: "FACE_MILL", diameter: 50, cornerRadius: 2,   flutes: 3, vc: 600, rpm: 6000, fz: 0.15, ap: 2.0,  ae: 25.0 },
   { name: "32R0.8", machine: "Danusys", toolType: "FACE_MILL", diameter: 32, cornerRadius: 0.8, flutes: 3, vc: 424, rpm: 4250, fz: 0.15, ap: null, ae: null },
 ];
 
 async function seedStarterTools() {
+  // One-time cleanup of legacy records — deleteMany on missing names is a no-op
+  await prisma.cuttingTool.deleteMany({
+    where: { name: { in: ["50r2", "Face Mill D32 R0.8 Z4", "Face Mill D50 R2 Z3"] } },
+  });
+
   for (const tool of STARTER_TOOLS) {
     const existing = await prisma.cuttingTool.findFirst({ where: { name: tool.name } });
     if (!existing) {
