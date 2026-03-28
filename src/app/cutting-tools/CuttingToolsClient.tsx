@@ -27,7 +27,7 @@ import { MrrComparator } from "./MrrComparator";
 // ── Local types (library/UI only) ──────────────────────────────────────────
 
 type Machine = "Danusys" | "Hurco" | "Both";
-type Tab     = "library" | "calculator" | "compare" | "comparator";
+type Tab     = "library" | "calculator" | "compare" | "comparator" | "reference";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -67,6 +67,8 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
   const [showForm, setShowForm]           = useState(false);
   const [editingId, setEditingId]         = useState<string | null>(null);
   const [form, setForm]                   = useState(emptyForm());
+  const [calcFormError, setCalcFormError] = useState<string | null>(null);
+  const [calcFormClamped, setCalcFormClamped] = useState(false);
   const nextId                            = useRef(3);
 
   // Standalone calculator state
@@ -184,7 +186,27 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
   const setF = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const setC = (k: string, v: string) => setCalc((p) => ({ ...p, [k]: v }));
 
-  const startAdd = () => { setForm(emptyForm()); setEditingId(null); setShowForm(true); };
+  const handleCalcRpmFeed = () => {
+    const D  = Number(form.diameter);
+    const z  = Number(form.flutes);
+    const vc = Number(form.vc);
+    const fz = Number(form.fz);
+    if (!D || !z || !vc || !fz) {
+      setCalcFormError("Fill in D, Vc, Fz and Z to calculate");
+      setCalcFormClamped(false);
+      return;
+    }
+    setCalcFormError(null);
+    const machineMax = form.machine === "Both" ? MACHINE_MAX_RPM.Hurco : MACHINE_MAX_RPM[form.machine as "Danusys" | "Hurco"];
+    const idealRpm   = calcRpm(vc, D);
+    const clamped    = idealRpm > machineMax;
+    const actualRpm  = clamped ? machineMax : idealRpm;
+    const feed       = calcFeed(fz, z, actualRpm);
+    setCalcFormClamped(clamped);
+    setForm((p) => ({ ...p, rpm: String(Math.round(actualRpm)), feed: String(Math.round(feed)) }));
+  };
+
+  const startAdd = () => { setForm(emptyForm()); setEditingId(null); setShowForm(true); setCalcFormError(null); setCalcFormClamped(false); };
 
   const startEdit = (t: CuttingTool) => {
     setForm({
@@ -203,6 +225,8 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
     });
     setEditingId(t.id);
     setShowForm(true);
+    setCalcFormError(null);
+    setCalcFormClamped(false);
   };
 
   const loadIntoCalc = (t: CuttingTool) => {
@@ -297,7 +321,7 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
 
       {/* Tab nav */}
       <div className="flex items-center border-b overflow-x-auto">
-        {(["library", "calculator", "compare", "comparator"] as const).map((t) => (
+        {(["library", "calculator", "compare", "comparator", "reference"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
               tab === t ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"
@@ -306,7 +330,8 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
             {t === "library"     ? "Library"
            : t === "calculator"  ? "Calculator"
            : t === "compare"     ? "Compare Setups"
-           :                       "MRR Comparator"}
+           : t === "comparator"  ? "MRR Comparator"
+           :                       "Reference"}
           </button>
         ))}
       </div>
@@ -356,14 +381,35 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
               </div>
               <div>
                 <div className="text-xs text-gray-400 font-medium uppercase tracking-wider mb-1.5">Machining Parameters (reference values)</div>
-                <div className="grid grid-cols-7 gap-2">
+                {/* Row 1 — inputs: Vc, Fz, ap, ae */}
+                <div className="grid grid-cols-4 gap-2 mb-2">
                   {[
-                    { k: "vc",   label: "Vc (m/min)",   ph: "80"   },
+                    { k: "vc", label: "Vc (m/min)",    ph: "80"   },
+                    { k: "fz", label: "Fz (mm/tooth)", ph: "0.05" },
+                    { k: "ap", label: "ap (mm)",        ph: "5"    },
+                    { k: "ae", label: "ae (mm)",        ph: "2"    },
+                  ].map(({ k, label, ph }) => (
+                    <div key={k}>
+                      <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
+                      <input type="number" step="any" min="0" value={(form as Record<string, string>)[k]} onChange={(e) => setF(k, e.target.value)} className="w-full border rounded px-2 py-1 text-xs" placeholder={ph} />
+                    </div>
+                  ))}
+                </div>
+                {/* Calculate button row */}
+                <div className="flex items-center gap-3 mb-2">
+                  <button type="button" onClick={handleCalcRpmFeed}
+                    className="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 font-medium"
+                  >⟳ Calculate S &amp; F</button>
+                  {calcFormError && <span className="text-xs text-red-600">{calcFormError}</span>}
+                  {calcFormClamped && !calcFormError && (
+                    <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">⚠ S clamped to machine max</span>
+                  )}
+                </div>
+                {/* Row 2 — computed / manual: S, F, MRR */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
                     { k: "rpm",  label: "S (rpm)",       ph: "3200" },
                     { k: "feed", label: "F (mm/min)",    ph: "640"  },
-                    { k: "fz",   label: "Fz (mm/tooth)", ph: "0.05" },
-                    { k: "ap",   label: "ap (mm)",       ph: "5"    },
-                    { k: "ae",   label: "ae (mm)",       ph: "2"    },
                     { k: "mrr",  label: "MRR (cm³/min)", ph: ""     },
                   ].map(({ k, label, ph }) => (
                     <div key={k}>
@@ -710,6 +756,71 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
       {/* ══ MRR Comparator tab ══ */}
       {tab === "comparator" && (
         <MrrComparator tools={tools} />
+      )}
+
+      {/* ══ Reference tab ══ */}
+      {tab === "reference" && (
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="bg-gray-900 px-4 py-2.5">
+            <span className="text-sm font-bold text-white uppercase tracking-wider">Reference</span>
+            <span className="text-xs text-gray-400 ml-2 font-normal">Aluminium (6061 / 7075) — Recommended cutting parameters</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  {["Tool Type", "Vc min–max (m/min)", "Fz min–max (mm/tooth)", "Notes"].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-600 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {[
+                  {
+                    type: "Face Mill",
+                    vc:   "400 – 800",
+                    fz:   "0.05 – 0.20",
+                    notes: "Use high Vc with sharp inserts; avoid built-up edge",
+                  },
+                  {
+                    type: "End Mill (flat)",
+                    vc:   "200 – 500",
+                    fz:   "0.02 – 0.10",
+                    notes: "Reduce ae for slotting; 3–4 flutes recommended",
+                  },
+                  {
+                    type: "Ball Nose Mill",
+                    vc:   "150 – 400",
+                    fz:   "0.01 – 0.05",
+                    notes: "Vc at ball centre is 0 — use effective diameter",
+                  },
+                  {
+                    type: "Drill",
+                    vc:   "60 – 150",
+                    fz:   "0.05 – 0.15 / rev",
+                    notes: "Peck drill for chip evacuation; through-coolant preferred",
+                  },
+                  {
+                    type: "Reamer",
+                    vc:   "30 – 80",
+                    fz:   "0.05 – 0.20 / rev",
+                    notes: "0.1–0.3 mm stock for finishing; flood coolant",
+                  },
+                ].map((row) => (
+                  <tr key={row.type} className="hover:bg-gray-50">
+                    <td className="px-4 py-2.5 font-medium text-gray-900 whitespace-nowrap">{row.type}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums text-gray-700">{row.vc}</td>
+                    <td className="px-4 py-2.5 font-mono tabular-nums text-gray-700">{row.fz}</td>
+                    <td className="px-4 py-2.5 text-gray-500 text-xs">{row.notes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-2 border-t bg-gray-50 text-xs text-gray-400 italic">
+            Values are starting points. Adjust for coating, coolant strategy, and rigidity.
+          </div>
+        </div>
       )}
 
     </div>
