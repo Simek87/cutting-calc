@@ -280,7 +280,7 @@ export function CuttingToolsClient({ initialTools }: { initialTools: CuttingTool
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Cutting Tools</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Milling Calc</h1>
           <p className="text-xs text-gray-400 mt-0.5">Tool library · Calculator · Compare Setups</p>
         </div>
         {tab === "library" && (
