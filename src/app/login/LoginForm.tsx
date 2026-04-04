@@ -23,6 +23,7 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           required
+          defaultValue="mateusz@enviropax.com"
           placeholder="you@enviropax.com"
           className="px-3 py-2 text-sm rounded-lg outline-none"
           style={{
@@ -50,6 +51,7 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
+          defaultValue="test997"
           placeholder="••••••••"
           className="px-3 py-2 text-sm rounded-lg outline-none"
           style={{
