@@ -72,6 +72,9 @@ export default async function RootLayout({
           <Link href="/archive" className="text-sm" style={{ color: "#8b9196" }}>
             Archive
           </Link>
+          <Link href="/notes" className="text-sm" style={{ color: "#8b9196" }}>
+            Notes
+          </Link>
 
           {/* Milling Calc external link */}
           <a

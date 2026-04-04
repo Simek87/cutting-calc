@@ -347,3 +347,14 @@ enum TodoColumn {
   Hurco
   Danusys
 }
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  category  String?
+  tags      String?
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
