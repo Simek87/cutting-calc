@@ -31,18 +31,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!email || !password) return null;
 
-        const authEmail = process.env.AUTH_EMAIL;
-        const authHash = process.env.AUTH_PASSWORD;
-
-        if (!authEmail || !authHash) {
-          console.error("AUTH_EMAIL or AUTH_PASSWORD env var not set");
-          return null;
+        // Hardcoded for now — env var issues on Vercel
+        if (email === "mateusz@enviropax.com" && password === "test997") {
+          return { id: "1", name: "Mateusz", email, initials: "MA" };
         }
 
-        if (email !== authEmail) return null;
-        if (password !== authHash) return null;
-
-        return { id: "1", name: "Mateusz", email, initials: "MA" };
+        return null;
       },
     }),
   ],
