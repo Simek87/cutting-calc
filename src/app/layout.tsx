@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { headers } from "next/headers";
+import { Geist, Geist_Mono, JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
+import { GlobalShortcuts } from "./GlobalShortcuts";
+import { auth, signOut } from "@/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,57 +15,115 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const host = (await headers()).get("host") ?? "";
-  if (host.startsWith("cutting-calc.")) {
-    return { title: "Milling Calc", description: "Bidirectional milling calculator" };
-  }
-  return { title: "Toolroom Dashboard", description: "MES / Workflow system for thermoforming toolmaking" };
-}
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+export const metadata: Metadata = {
+  title: "Toolroom Dashboard",
+  description: "MES / Workflow system for thermoforming toolmaking",
+};
 
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const host = (await headers()).get("host") ?? "";
-  const isMilCalc = host.startsWith("cutting-calc.");
+  const session = await auth();
 
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <nav className="border-b bg-white px-4 py-2 flex items-center gap-6">
-          {isMilCalc ? (
-            // cutting-calc.vercel.app — only branding, no toolroom links
-            <span className="font-semibold text-sm text-gray-800">Milling Calc</span>
-          ) : (
-            // toolrom.vercel.app — full toolroom nav + external Milling Calc link
-            <>
-              <Link href="/" className="font-semibold text-sm text-gray-800 hover:text-gray-600">
-                Toolroom
-              </Link>
-              <Link href="/kanban" className="text-sm text-gray-500 hover:text-gray-800">
-                Kanban
-              </Link>
-              <Link href="/procurement" className="text-sm text-gray-500 hover:text-gray-800">
-                Procurement
-              </Link>
-              <Link href="/outsourcing" className="text-sm text-gray-500 hover:text-gray-800">
-                Outsourcing
-              </Link>
-              <Link href="/suppliers" className="text-sm text-gray-500 hover:text-gray-800">
-                Suppliers
-              </Link>
-              <a
-                href="https://cutting-calc.vercel.app/cutting-tools"
-                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded px-2.5 py-0.5 hover:bg-indigo-50 transition-colors"
+      <body className="h-full flex flex-col" style={{ backgroundColor: "#0d0f10", color: "#e2e4e6" }}>
+        <GlobalShortcuts />
+        <nav
+          className="flex-shrink-0 px-4 py-2 flex items-center gap-6"
+          style={{ backgroundColor: "#141618", borderBottom: "1px solid #2a2d30" }}
+        >
+          <Link
+            href="/"
+            className="font-semibold text-sm"
+            style={{ color: "#e8a020", fontFamily: "var(--font-jetbrains-mono)" }}
+          >
+            TOOLROOM
+          </Link>
+          <Link href="/kanban" className="text-sm" style={{ color: "#8b9196" }}>
+            Kanban
+          </Link>
+          <Link href="/procurement" className="text-sm" style={{ color: "#8b9196" }}>
+            Procurement
+          </Link>
+          <Link href="/outsourcing" className="text-sm" style={{ color: "#8b9196" }}>
+            Outsourcing
+          </Link>
+          <Link href="/suppliers" className="text-sm" style={{ color: "#8b9196" }}>
+            Suppliers
+          </Link>
+          <Link href="/todo" className="text-sm" style={{ color: "#8b9196" }}>
+            To-Do
+          </Link>
+          <Link href="/issues" className="text-sm" style={{ color: "#8b9196" }}>
+            Issues
+          </Link>
+          <Link href="/archive" className="text-sm" style={{ color: "#8b9196" }}>
+            Archive
+          </Link>
+
+          {/* Milling Calc external link */}
+          <a
+            href="https://cutting-calc.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs px-2.5 py-1 rounded"
+            style={{
+              color: "#e8a020",
+              border: "1px solid rgba(232,160,32,0.3)",
+              backgroundColor: "rgba(232,160,32,0.08)",
+              fontFamily: "var(--font-jetbrains-mono)",
+            }}
+          >
+            Milling Calc ↗
+          </a>
+
+          {/* User info + Sign out */}
+          {session?.user && (
+            <div className="ml-auto flex items-center gap-3">
+              {/* Avatar / initials badge */}
+              <span
+                className="text-xs w-7 h-7 rounded-full flex items-center justify-center font-semibold flex-shrink-0"
+                style={{
+                  backgroundColor: "rgba(232,160,32,0.15)",
+                  color: "#e8a020",
+                  border: "1px solid rgba(232,160,32,0.3)",
+                  fontFamily: "var(--font-jetbrains-mono)",
+                }}
               >
-                Milling Calc
-              </a>
-            </>
+                {session.user.initials}
+              </span>
+              <span className="text-xs hidden sm:block" style={{ color: "#8b9196" }}>
+                {session.user.name}
+              </span>
+
+              {/* Sign out form — server action */}
+              <form
+                action={async () => {
+                  "use server";
+                  await signOut({ redirectTo: "/login" });
+                }}
+              >
+                <button
+                  type="submit"
+                  className="text-xs px-2.5 py-1 rounded hover:opacity-80 transition-opacity"
+                  style={{ color: "#8b9196", border: "1px solid #2a2d30" }}
+                >
+                  Sign out
+                </button>
+              </form>
+            </div>
           )}
         </nav>
         {children}

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { OperationStatus } from "@/generated/prisma/client";
 import { logActivity } from "@/lib/activity";
+import { auth } from "@/auth";
 
 export async function PATCH(
   req: NextRequest,
@@ -9,6 +10,8 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
+  const session = await auth();
+  const changedBy = session?.user?.initials ?? session?.user?.name?.slice(0, 4) ?? "?";
 
   const prev = body.status
     ? await prisma.operation.findUnique({
@@ -22,9 +25,18 @@ export async function PATCH(
     data: {
       ...(body.status && { status: body.status as OperationStatus }),
       ...(body.actualTime !== undefined && { actualTime: body.actualTime }),
+      ...(body.estimatedTime !== undefined && { estimatedTime: body.estimatedTime }),
+      ...(body.machine !== undefined && { machine: body.machine }),
       ...(body.dependsOnPrevious !== undefined && { dependsOnPrevious: body.dependsOnPrevious }),
       ...("orderId" in body && { orderId: body.orderId ?? null }),
       ...("outsourceJobId" in body && { outsourceJobId: body.outsourceJobId ?? null }),
+      ...(body.programRevision !== undefined && { programRevision: body.programRevision }),
+      ...(body.programRevNote !== undefined && { programRevNote: body.programRevNote }),
+      ...(body.toolList !== undefined && { toolList: body.toolList }),
+      ...(body.status && prev?.status !== body.status && {
+        statusChangedAt: new Date(),
+        changedBy,
+      }),
     },
     include: {
       linkedOrder: { select: { id: true, supplier: true, status: true, eta: true, poNumber: true } },

@@ -35,6 +35,12 @@ export async function PATCH(
       ...(body.status && { status: body.status as ToolStatus }),
       ...(body.dueDate !== undefined && { dueDate: body.dueDate ? new Date(body.dueDate) : null }),
       ...(body.familyId !== undefined && { familyId: body.familyId }),
+      ...(body.projectType !== undefined && { projectType: body.projectType }),
+      ...(body.machineTarget !== undefined && { machineTarget: body.machineTarget ?? null }),
+      ...(body.archived !== undefined && {
+        archived: body.archived,
+        archivedAt: body.archived ? new Date() : null,
+      }),
     },
   });
   if (body.status && prev?.status !== body.status) {

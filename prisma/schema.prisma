@@ -16,17 +16,22 @@ model Family {
 }
 
 model Tool {
-  id          String          @id @default(cuid())
-  projectName String
-  dueDate     DateTime?
-  status      ToolStatus      @default(Management)
-  familyId    String?
-  family      Family?         @relation(fields: [familyId], references: [id])
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  parts       Part[]
-  sections    Section[]
-  events      CalendarEvent[]
+  id             String       @id @default(cuid())
+  projectName    String
+  dueDate        DateTime?
+  status         ToolStatus   @default(Management)
+  familyId       String?
+  family         Family?      @relation(fields: [familyId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  projectType    ProjectType  @default(NewTool)
+  archived       Boolean      @default(false)
+  archivedAt     DateTime?
+  machineTarget  String?
+  parts          Part[]
+  sections       Section[]
+  events         CalendarEvent[]
+  issues         Issue[]
 }
 
 model Section {
@@ -38,62 +43,79 @@ model Section {
 }
 
 model Part {
-  id            String         @id @default(cuid())
-  toolId        String
-  tool          Tool           @relation(fields: [toolId], references: [id], onDelete: Cascade)
-  sectionId     String?
-  section       Section?       @relation(fields: [sectionId], references: [id])
-  name          String
-  type          PartType       @default(standard)
-  quantity      Int            @default(1)
+  id                String            @id @default(cuid())
+  toolId            String
+  tool              Tool              @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  sectionId         String?
+  section           Section?          @relation(fields: [sectionId], references: [id])
+  name              String
+  type              PartType          @default(standard)
+  quantity          Int               @default(1)
   /// @deprecated Not derived from operations. Kept for schema compatibility; do not use in active logic or UI.
-  status        PartStatus     @default(NotOrdered)
-  supplier      String?
-  notes         String?
-  drawingRef    String?
-  requiresLaser Boolean        @default(false)
-  material      String?
-  thickness     String?
-  size          String?
-  createdAt     DateTime       @default(now())
-  operations    Operation[]
-  outsourceJobs OutsourceJob[]
-  attachments   Attachment[]
-  orders        Order[]
-  orderItems    OrderItem[]
+  status            PartStatus        @default(NotOrdered)
+  supplier          String?
+  notes             String?
+  drawingRef        String?
+  requiresLaser     Boolean           @default(false)
+  material          String?
+  thickness         String?
+  size              String?
+  createdAt         DateTime          @default(now())
+  conversionStatus  ConversionStatus  @default(New)
+  materialType      MaterialType?
+  dimX              Float?
+  dimY              Float?
+  dimZ              Float?
+  revModel          Int               @default(1)
+  revProgram        Int               @default(1)
+  revProgramNote    String?
+  operations        Operation[]
+  outsourceJobs     OutsourceJob[]
+  attachments       Attachment[]
+  orders            Order[]
+  orderItems        OrderItem[]
+  issues            Issue[]
 }
 
 model Attachment {
-  id        String         @id @default(cuid())
-  name      String
-  type      AttachmentType
-  filePath  String?
-  url       String?
-  partId    String?
-  part      Part?          @relation(fields: [partId], references: [id], onDelete: SetNull)
-  familyId  String?
-  family    Family?        @relation(fields: [familyId], references: [id], onDelete: SetNull)
-  createdAt DateTime       @default(now())
+  id          String         @id @default(cuid())
+  name        String
+  type        AttachmentType
+  filePath    String?
+  url         String?
+  partId      String?
+  part        Part?          @relation(fields: [partId], references: [id], onDelete: SetNull)
+  familyId    String?
+  family      Family?        @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  operationId String?
+  operation   Operation?     @relation(fields: [operationId], references: [id], onDelete: SetNull)
+  createdAt   DateTime       @default(now())
 }
 
 model Operation {
-  id            String          @id @default(cuid())
-  partId        String
-  part          Part            @relation(fields: [partId], references: [id], onDelete: Cascade)
-  name          String
-  order         Int
-  type          OperationType   @default(internal)
+  id                String          @id @default(cuid())
+  partId            String
+  part              Part            @relation(fields: [partId], references: [id], onDelete: Cascade)
+  name              String
+  order             Int
+  type              OperationType   @default(internal)
   status            OperationStatus @default(NotStarted)
   dependsOnPrevious Boolean         @default(true)
-  machine       String?
-  supplier      String?
-  estimatedTime Float?
-  actualTime    Float?
-  createdAt     DateTime        @default(now())
-  orderId        String?
-  linkedOrder    Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  outsourceJobId String?
-  linkedJob      OutsourceJob?   @relation(fields: [outsourceJobId], references: [id], onDelete: SetNull)
+  machine           String?
+  supplier          String?
+  estimatedTime     Float?
+  actualTime        Float?
+  createdAt         DateTime        @default(now())
+  changedBy         String?
+  statusChangedAt   DateTime?
+  programRevision   Int?
+  programRevNote    String?
+  toolList          String?
+  orderId           String?
+  linkedOrder       Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  outsourceJobId    String?
+  linkedJob         OutsourceJob?   @relation(fields: [outsourceJobId], references: [id], onDelete: SetNull)
+  attachments       Attachment[]
 }
 
 model Order {
@@ -160,6 +182,58 @@ model CalendarEvent {
   createdAt   DateTime @default(now())
 }
 
+model Issue {
+  id          String        @id @default(cuid())
+  toolId      String
+  tool        Tool          @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  partId      String?
+  part        Part?         @relation(fields: [partId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  status      IssueStatus   @default(Open)
+  priority    IssuePriority @default(Medium)
+  openedAt    DateTime      @default(now())
+  closedAt    DateTime?
+  createdAt   DateTime      @default(now())
+}
+
+model ProcessCard {
+  id        String   @id @default(cuid())
+  toolId    String
+  partId    String
+  printedAt DateTime @default(now())
+  printedBy String?
+}
+
+model TodoItem {
+  id                String      @id @default(cuid())
+  column            TodoColumn
+  text              String
+  subtext           String?
+  done              Boolean     @default(false)
+  doneAt            DateTime?
+  order             Int         @default(0)
+  weekStart         DateTime
+  linkedPartId      String?
+  linkedOperationId String?
+  createdAt         DateTime    @default(now())
+}
+
+model Supplier {
+  id                   String           @id @default(cuid())
+  name                 String
+  email                String
+  notes                String?
+  emailSubjectTemplate String?
+  emailBodyTemplate    String?
+  createdAt            DateTime         @default(now())
+  category             SupplierCategory @default(Material)
+  orders               Order[]
+  outsourceJobs        OutsourceJob[]
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+
 enum ToolStatus {
   Management
   CAD
@@ -170,16 +244,11 @@ enum ToolStatus {
   Cancelled
 }
 
-model Supplier {
-  id                   String         @id @default(cuid())
-  name                 String
-  email                String
-  notes                String?
-  emailSubjectTemplate String?
-  emailBodyTemplate    String?
-  createdAt            DateTime       @default(now())
-  orders               Order[]
-  outsourceJobs        OutsourceJob[]
+enum ProjectType {
+  NewTool
+  Conversion
+  RnD
+  Custom
 }
 
 enum PartType {
@@ -194,6 +263,17 @@ enum PartStatus {
   InProgress
   Ready
   Installed
+}
+
+enum ConversionStatus {
+  New
+  Reuse
+  Rework
+}
+
+enum MaterialType {
+  ToolingPlate
+  RawStock
 }
 
 enum OperationType {
@@ -236,33 +316,34 @@ enum AttachmentType {
   DXF
   PDF
   STEP
+  NC
+  IMAGE
+  OTHER
 }
 
-// ── Cutting Tools module (separate from production-control workflow) ────────
+enum IssueStatus {
+  Open
+  InProgress
+  Closed
+}
 
-enum CuttingToolMachine {
-  Danusys
+enum IssuePriority {
+  Low
+  Medium
+  High
+  Critical
+}
+
+enum SupplierCategory {
+  Material
+  Gundrilling
+  Laser
+  WaterJet
+  Other
+}
+
+enum TodoColumn {
+  MyTasks
   Hurco
-  Both
-}
-
-model CuttingTool {
-  id           String             @id @default(cuid())
-  name         String
-  machine      CuttingToolMachine
-  toolType     String?
-  diameter     Float
-  cornerRadius Float?
-  flutes       Int
-  notes        String?
-  // Reference / nominal machining parameters
-  vc           Float?   // cutting speed [m/min]
-  rpm          Float?   // spindle speed [rpm]
-  feed         Float?   // feed rate [mm/min]
-  fz           Float?   // feed per tooth [mm/tooth]
-  ap           Float?   // axial depth of cut [mm]
-  ae           Float?   // radial depth of cut [mm]
-  mrr          Float?   // material removal rate [cm³/min]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  Danusys
 }

@@ -24,6 +24,14 @@ export async function PATCH(
       ...(body.thickness !== undefined && { thickness: body.thickness }),
       ...(body.size !== undefined && { size: body.size }),
       ...(body.quantity !== undefined && { quantity: body.quantity }),
+      ...(body.dimX !== undefined && { dimX: body.dimX }),
+      ...(body.dimY !== undefined && { dimY: body.dimY }),
+      ...(body.dimZ !== undefined && { dimZ: body.dimZ }),
+      ...(body.materialType !== undefined && { materialType: body.materialType }),
+      ...(body.conversionStatus !== undefined && { conversionStatus: body.conversionStatus }),
+      ...(body.revModel !== undefined && { revModel: body.revModel }),
+      ...(body.revProgram !== undefined && { revProgram: body.revProgram }),
+      ...(body.revProgramNote !== undefined && { revProgramNote: body.revProgramNote }),
     },
   });
   return NextResponse.json(part);
