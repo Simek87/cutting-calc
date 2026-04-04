@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       filePath: body.filePath ?? null,
       url: body.url ?? null,
       partId: body.partId ?? null,
-      familyId: body.familyId ?? null,
+      toolGroupId: body.toolGroupId ?? body.familyId ?? null,
     },
   });
   return NextResponse.json(attachment, { status: 201 });

@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   const partId = formData.get("partId") as string | null;
-  const familyId = formData.get("familyId") as string | null;
+  const toolGroupId = (formData.get("toolGroupId") ?? formData.get("familyId")) as string | null;
   const operationId = formData.get("operationId") as string | null;
 
   if (!file) {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       type,
       url: blob.url,
       partId: partId ?? null,
-      familyId: familyId ?? null,
+      toolGroupId: toolGroupId ?? null,
       operationId: operationId ?? null,
     },
   });

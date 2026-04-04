@@ -7,7 +7,15 @@ export type ToolStatus =
   | "Done"
   | "Cancelled";
 
-export const FIXED_SECTIONS = ["N/A", "Mould", "Plug Assist", "Anvil", "Cutter", "PnP", "Pusher"] as const;
+export const FIXED_SECTIONS = ["MLD", "PLG", "CUT", "AVL", "PBX"] as const;
+
+export const SECTION_FULL_NAMES: Record<string, string> = {
+  MLD: "Moulding",
+  PLG: "Plug Assist",
+  CUT: "Cutter",
+  AVL: "Anvil",
+  PBX: "Pressure Box",
+};
 
 export interface Supplier {
   id: string;
@@ -83,7 +91,7 @@ export interface Attachment {
   filePath: string | null;
   url: string | null;
   partId: string | null;
-  familyId: string | null;
+  toolGroupId: string | null;
   createdAt: string;
 }
 
@@ -93,7 +101,7 @@ export interface Section {
   toolId: string;
 }
 
-export interface Family {
+export interface ToolGroup {
   id: string;
   name: string;
   notes: string | null;
@@ -113,6 +121,7 @@ export interface Part {
   notes: string | null;
   drawingRef: string | null;
   requiresLaser: boolean;
+  isStandard: boolean;
   material: string | null;
   thickness: string | null;
   size: string | null;
@@ -127,8 +136,8 @@ export interface Tool {
   projectName: string;
   dueDate: string | null;
   status: ToolStatus;
-  familyId: string | null;
-  family?: Family | null;
+  toolGroupId: string | null;
+  toolGroup?: ToolGroup | null;
   createdAt: string;
   updatedAt: string;
   parts: Part[];

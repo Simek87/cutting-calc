@@ -222,14 +222,14 @@ function buildOpMailto(
     const supplier = findSupplierByCategory(suppliers, catMap[emailType] ?? "");
     return generateExternalOpMailto(emailType, {
       partId: partName,
-      familyName: projectName,
+      toolName: projectName,
       supplierEmail: supplier?.email ?? "",
     });
   }
   // procurement — single-part material order
   const supplier = findSupplierByCategory(suppliers, "Material");
   return generateMaterialOrderMailto(
-    [{ partId: partName, familyName: projectName, material: null, dimX: null, dimY: null, dimZ: null, materialType: null }],
+    [{ partId: partName, toolName: projectName, material: null, dimX: null, dimY: null, dimZ: null, materialType: null }],
     supplier?.email ?? ""
   );
 }

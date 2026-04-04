@@ -286,7 +286,7 @@ function Toast({ message, onDismiss }: { message: string; onDismiss: () => void 
 
 type MaterialPart = {
   partId: string;
-  familyName: string;
+  toolName: string;
   material: string | null;
   dimX: number | null;
   dimY: number | null;
@@ -329,8 +329,8 @@ function MaterialOrderModal({
         </h2>
         <p className="text-xs mb-4" style={{ color: C.textMuted }}>
           {parts.length} part{parts.length !== 1 ? "s" : ""} across{" "}
-          {[...new Set(parts.map((p) => p.familyName))].length} project
-          {[...new Set(parts.map((p) => p.familyName))].length !== 1 ? "s" : ""}
+          {[...new Set(parts.map((p) => p.toolName))].length} project
+          {[...new Set(parts.map((p) => p.toolName))].length !== 1 ? "s" : ""}
         </p>
         <div className="mb-4">
           <label className="block text-xs mb-1" style={{ color: C.textDim }}>
@@ -485,14 +485,14 @@ function buildOpMailtoHref(
     const supplier = findSupplierByCategory(suppliers, catMap[emailType] ?? "");
     return generateExternalOpMailto(emailType, {
       partId: op.partName,
-      familyName: projectName,
+      toolName: projectName,
       supplierEmail: supplier?.email ?? "",
     });
   }
   // procurement
   const supplier = findSupplierByCategory(suppliers, "Material");
   return generateMaterialOrderMailto(
-    [{ partId: op.partName, familyName: projectName, material: null, dimX: null, dimY: null, dimZ: null, materialType: null }],
+    [{ partId: op.partName, toolName: projectName, material: null, dimX: null, dimY: null, dimZ: null, materialType: null }],
     supplier?.email ?? ""
   );
 }
@@ -903,7 +903,7 @@ export function DashboardClient({
       .filter((p) => !!p.materialType)
       .map((p) => ({
         partId: p.name,
-        familyName: tool.projectName,
+        toolName: tool.projectName,
         material: p.material,
         dimX: p.dimX,
         dimY: p.dimY,

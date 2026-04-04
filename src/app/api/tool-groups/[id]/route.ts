@@ -7,14 +7,14 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const family = await prisma.family.update({
+  const toolGroup = await prisma.toolGroup.update({
     where: { id },
     data: {
       ...(body.name !== undefined && { name: body.name }),
       ...(body.notes !== undefined && { notes: body.notes }),
     },
   });
-  return NextResponse.json(family);
+  return NextResponse.json(toolGroup);
 }
 
 export async function DELETE(
@@ -22,6 +22,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await prisma.family.delete({ where: { id } });
+  await prisma.toolGroup.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });
 }

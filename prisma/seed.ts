@@ -1,6 +1,7 @@
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import * as dotenv from "dotenv";
+import { SECTION_TEMPLATES } from "../src/lib/operation-templates";
 
 dotenv.config({ path: ".env" });
 
@@ -8,6 +9,8 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  // ── Suppliers ─────────────────────────────────────────────────────────────
+
   console.log("Seeding suppliers…");
 
   const suppliers = [
@@ -54,6 +57,55 @@ async function main() {
     } else {
       await prisma.supplier.create({ data: s });
       console.log(`  ✓  ${s.name} (created)`);
+    }
+  }
+
+  // ── Part template demo tool ───────────────────────────────────────────────
+  // Creates a "TEMPLATE" tool with all standard sections and default parts.
+  // This serves as a reference / starting point for new tools.
+
+  console.log("\nSeeding KMD 78.2 Standard template tool…");
+
+  const TEMPLATE_NAME = "KMD78-TEMPLATE";
+
+  const existing = await prisma.tool.findFirst({
+    where: { projectName: TEMPLATE_NAME },
+  });
+
+  if (existing) {
+    console.log(`  ↺  ${TEMPLATE_NAME} already exists — skipping`);
+  } else {
+    const templateTool = await prisma.tool.create({
+      data: {
+        projectName: TEMPLATE_NAME,
+        status: "Management",
+        projectType: "NewTool",
+        archived: true, // kept out of active view
+      },
+    });
+
+    for (const sectionTpl of SECTION_TEMPLATES) {
+      const section = await prisma.section.create({
+        data: {
+          name: sectionTpl.code,
+          toolId: templateTool.id,
+        },
+      });
+
+      for (const partTpl of sectionTpl.parts) {
+        await prisma.part.create({
+          data: {
+            toolId: templateTool.id,
+            sectionId: section.id,
+            name: partTpl.name,
+            isStandard: partTpl.isStandard,
+          },
+        });
+      }
+
+      console.log(
+        `  ✓  ${sectionTpl.code} — ${sectionTpl.parts.length} parts`
+      );
     }
   }
 

@@ -77,7 +77,21 @@
       "Bash(npx ts-node:*)",
       "Bash(npx tsx:*)",
       "Bash(cat src/app/api/operations/[id]/route.ts)",
-      "Bash(grep -v \"^\\\\s*//\")"
+      "Bash(grep -v \"^\\\\s*//\")",
+      "Bash(npx auth:*)",
+      "Bash(node -e \"require\\(''crypto''\\).randomBytes\\(32\\).toString\\(''base64''\\)\")",
+      "Bash(node:*)",
+      "Bash(vercel ls:*)",
+      "Bash(vercel logs:*)",
+      "Bash(printf '$2b$10$xaEeiD35Cxi0BPfjOrDx6uXQdlkvORIR1vnM/tRpwKysje9oAp7Ja')",
+      "Bash(printf 'test997')",
+      "Bash(gh repo:*)",
+      "Bash(grep -n \"family\\\\|Family\" src/app/tools/[id]/ToolDetailClient.tsx)",
+      "Bash(grep -n \"family\\\\|Family\\\\|families\" src/app/api/tools/[id]/route.ts)",
+      "Bash(grep -n \"family\\\\|Family\" src/app/archive/ArchiveClient.tsx src/app/kanban/page.tsx src/components/KanbanBoard.tsx src/app/tools/[id]/parts/[partId]/PartDetailClient.tsx)",
+      "Bash(grep -n \"family\\\\|Family\" src/app/tools/[id]/parts/[partId]/DxfViewer.tsx)",
+      "Bash(grep -n \"FAMILY\\\\|familyName\\\\|toolName\\\\|program\\\\|revision\\\\|NC\\\\|naming\" src/app/tools/[id]/parts/[partId]/PartDetailClient.tsx)",
+      "Bash(rm:*)"
     ]
   }
 }

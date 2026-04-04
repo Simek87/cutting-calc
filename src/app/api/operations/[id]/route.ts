@@ -10,8 +10,8 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
-  const session = await auth();
-  const changedBy = session?.user?.initials ?? session?.user?.name?.slice(0, 4) ?? "?";
+  const session = await auth().catch(() => null);
+  const changedBy = session?.user?.initials ?? session?.user?.name?.slice(0, 4) ?? "SYS";
 
   const prev = body.status
     ? await prisma.operation.findUnique({

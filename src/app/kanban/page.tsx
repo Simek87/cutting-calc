@@ -7,7 +7,7 @@ export default async function HomePage() {
   const tools = await prisma.tool.findMany({
     where: { status: { not: "Cancelled" } },
     orderBy: { createdAt: "desc" },
-    include: { parts: { include: { operations: true } }, family: true },
+    include: { parts: { include: { operations: true } }, toolGroup: true },
   });
 
   return (

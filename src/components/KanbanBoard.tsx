@@ -71,7 +71,7 @@ export function KanbanBoard({ initialTools }: KanbanBoardProps) {
         const q = search.toLowerCase();
         return (
           t.projectName.toLowerCase().includes(q) ||
-          (t.family?.name ?? "").toLowerCase().includes(q)
+          (t.toolGroup?.name ?? "").toLowerCase().includes(q)
         );
       })
     : tools;

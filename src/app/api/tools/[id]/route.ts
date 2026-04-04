@@ -34,7 +34,7 @@ export async function PATCH(
       ...(body.projectName && { projectName: body.projectName }),
       ...(body.status && { status: body.status as ToolStatus }),
       ...(body.dueDate !== undefined && { dueDate: body.dueDate ? new Date(body.dueDate) : null }),
-      ...(body.familyId !== undefined && { familyId: body.familyId }),
+      ...(body.toolGroupId !== undefined && { toolGroupId: body.toolGroupId }),
       ...(body.projectType !== undefined && { projectType: body.projectType }),
       ...(body.machineTarget !== undefined && { machineTarget: body.machineTarget ?? null }),
       ...(body.archived !== undefined && {

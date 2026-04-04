@@ -7,12 +7,14 @@ datasource db {
   provider = "postgresql"
 }
 
-model Family {
+model ToolGroup {
   id          String       @id @default(cuid())
   name        String
   notes       String?
   tools       Tool[]
   attachments Attachment[]
+
+  @@map("Family")
 }
 
 model Tool {
@@ -20,8 +22,8 @@ model Tool {
   projectName    String
   dueDate        DateTime?
   status         ToolStatus   @default(Management)
-  familyId       String?
-  family         Family?      @relation(fields: [familyId], references: [id])
+  toolGroupId    String?      @map("familyId")
+  toolGroup      ToolGroup?   @relation(fields: [toolGroupId], references: [id])
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   projectType    ProjectType  @default(NewTool)
@@ -57,6 +59,7 @@ model Part {
   notes             String?
   drawingRef        String?
   requiresLaser     Boolean           @default(false)
+  isStandard        Boolean           @default(false)
   material          String?
   thickness         String?
   size              String?
@@ -85,8 +88,8 @@ model Attachment {
   url         String?
   partId      String?
   part        Part?          @relation(fields: [partId], references: [id], onDelete: SetNull)
-  familyId    String?
-  family      Family?        @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  toolGroupId String?        @map("familyId")
+  toolGroup   ToolGroup?     @relation(fields: [toolGroupId], references: [id], onDelete: SetNull)
   operationId String?
   operation   Operation?     @relation(fields: [operationId], references: [id], onDelete: SetNull)
   createdAt   DateTime       @default(now())
