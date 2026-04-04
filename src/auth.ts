@@ -1,6 +1,5 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { authConfig } from "@/auth.config";
 
 // ── Type augmentation ──────────────────────────────────────────────────────
@@ -41,9 +40,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         if (email !== authEmail) return null;
-
-        const valid = await bcrypt.compare(password, authHash);
-        if (!valid) return null;
+        if (password !== authHash) return null;
 
         return { id: "1", name: "Mateusz", email, initials: "MA" };
       },
