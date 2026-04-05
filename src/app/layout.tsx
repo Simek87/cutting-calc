@@ -79,11 +79,9 @@ export default async function RootLayout({
             Reference
           </Link>
 
-          {/* Milling Calc external link */}
-          <a
-            href="https://cutting-calc.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
+          {/* Milling Calc internal link */}
+          <Link
+            href="/calc"
             className="text-xs px-2.5 py-1 rounded"
             style={{
               color: "#e8a020",
@@ -92,8 +90,8 @@ export default async function RootLayout({
               fontFamily: "var(--font-jetbrains-mono)",
             }}
           >
-            Milling Calc ↗
-          </a>
+            Milling Calc
+          </Link>
 
           {/* User info + Sign out */}
           {session?.user && (
