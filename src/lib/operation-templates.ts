@@ -64,12 +64,65 @@ export const OPERATION_TEMPLATES: OperationTemplate[] = [
   },
 ];
 
+// ── Template wizard types ─────────────────────────────────────────────────────
+
+/** How the part quantity is determined in the wizard. */
+export type QtyRule = "cavities" | "tbd" | "one";
+
+/**
+ * Which operation preset is applied to new parts created from the template.
+ * - standard   : Order material → CAM → Milling → Assembly → Inspection
+ * - gundrilled : Order material → CAM → Milling → Gundrill → Finish → Assembly → Inspection
+ * - pnp-frame  : Order material → CAM → Milling → Assembly  (no inspection — PBX frame)
+ * - laser      : Order material → Laser cutting → Deburr → Assembly → Inspection
+ * - none       : No operations (bought-in standard parts)
+ */
+export type OpPreset = "standard" | "gundrilled" | "pnp-frame" | "laser" | "none";
+
+/** Canonical operations for each preset. */
+export const OP_PRESETS: Record<OpPreset, TemplateOperation[]> = {
+  standard: [
+    { name: "Order material", type: "procurement", order: 1 },
+    { name: "CAM",            type: "internal",    order: 2, dependsOnPrevious: false },
+    { name: "Milling",        type: "internal",    order: 3 },
+    { name: "Assembly",       type: "assembly",    order: 4 },
+    { name: "Inspection",     type: "inspection",  order: 5 },
+  ],
+  gundrilled: [
+    { name: "Order material", type: "procurement", order: 1 },
+    { name: "CAM",            type: "internal",    order: 2, dependsOnPrevious: false },
+    { name: "Milling",        type: "internal",    order: 3 },
+    { name: "Gundrill",       type: "internal",    order: 4 },
+    { name: "Finish",         type: "internal",    order: 5 },
+    { name: "Assembly",       type: "assembly",    order: 6 },
+    { name: "Inspection",     type: "inspection",  order: 7 },
+  ],
+  "pnp-frame": [
+    { name: "Order material", type: "procurement", order: 1 },
+    { name: "CAM",            type: "internal",    order: 2, dependsOnPrevious: false },
+    { name: "Milling",        type: "internal",    order: 3 },
+    { name: "Assembly",       type: "assembly",    order: 4 },
+  ],
+  laser: [
+    { name: "Order material", type: "procurement", order: 1 },
+    { name: "Laser cutting",  type: "outsource",   order: 2 },
+    { name: "Deburr",         type: "internal",    order: 3 },
+    { name: "Assembly",       type: "assembly",    order: 4 },
+    { name: "Inspection",     type: "inspection",  order: 5 },
+  ],
+  none: [],
+};
+
 // ── Section part templates ────────────────────────────────────────────────────
 
 export interface SectionPartTemplate {
   name: string;
-  /** True = bought-in standard part: no machining ops, no material order */
+  /** True = bought-in standard part: no machining ops, no material order. */
   isStandard: boolean;
+  /** Which operation sequence to create when building from template. */
+  opPreset: OpPreset;
+  /** How quantity is determined in the wizard. */
+  qtyRule: QtyRule;
 }
 
 export interface SectionTemplate {
@@ -84,59 +137,59 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
     code: "MLD",
     fullName: "Moulding",
     parts: [
-      { name: "FXT-PLATE",   isStandard: false },
-      { name: "FRAME-PLATE", isStandard: false },
-      { name: "BASE-PLATE",  isStandard: false },
-      { name: "CAVITY",      isStandard: false },
-      { name: "EXTRUSIONS",  isStandard: false },
-      { name: "VAC-PLATE",   isStandard: false },
-      { name: "WATER-PLATE", isStandard: false },
+      { name: "FXT-PLATE",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "FRAME-PLATE", isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "BASE-PLATE",  isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "CAVITY",      isStandard: false, opPreset: "gundrilled", qtyRule: "cavities" },
+      { name: "EXTRUSIONS",  isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "VAC-PLATE",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "WATER-PLATE", isStandard: false, opPreset: "standard",   qtyRule: "one"      },
     ],
   },
   {
     code: "PLG",
     fullName: "Plug Assist",
     parts: [
-      { name: "PLUG",         isStandard: false },
-      { name: "PLUG-PLATE",   isStandard: false },
-      { name: "CLAM-PLATE",   isStandard: false },
-      { name: "VAC-BLOCK",    isStandard: false },
-      { name: "PLUG-SHAFT",   isStandard: false },
-      { name: "MOVING-PLATE", isStandard: false },
-      { name: "EXTRUSIONS",   isStandard: false },
-      { name: "TENNONS",      isStandard: true  }, // bought-in standard part
-      { name: "FXT-PLATE",    isStandard: false },
+      { name: "PLUG",         isStandard: false, opPreset: "gundrilled", qtyRule: "cavities" },
+      { name: "PLUG-PLATE",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "CLAM-PLATE",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "VAC-BLOCK",    isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "PLUG-SHAFT",   isStandard: false, opPreset: "gundrilled", qtyRule: "cavities" },
+      { name: "MOVING-PLATE", isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "EXTRUSIONS",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "TENNONS",      isStandard: true,  opPreset: "none",       qtyRule: "tbd"      },
+      { name: "FXT-PLATE",    isStandard: false, opPreset: "standard",   qtyRule: "one"      },
     ],
   },
   {
     code: "CUT",
     fullName: "Cutter",
     parts: [
-      { name: "XAR500-PLATE", isStandard: false },
-      { name: "LOCATORS",     isStandard: false },
-      { name: "BLADE-BASE",   isStandard: false },
-      { name: "BLADE",        isStandard: false },
-      { name: "MUSHROOM",     isStandard: true  }, // bought-in standard part
-      { name: "BACK-PLATE",   isStandard: false },
+      { name: "XAR500-PLATE", isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "LOCATORS",     isStandard: false, opPreset: "standard",   qtyRule: "tbd"      },
+      { name: "BLADE-BASE",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "BLADE",        isStandard: false, opPreset: "standard",   qtyRule: "cavities" },
+      { name: "MUSHROOM",     isStandard: true,  opPreset: "none",       qtyRule: "tbd"      },
+      { name: "BACK-PLATE",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
     ],
   },
   {
     code: "AVL",
     fullName: "Anvil",
     parts: [
-      { name: "FXT-PLATE",    isStandard: false },
-      { name: "BOLSTER-PLATE",isStandard: false },
-      { name: "WEAR-PLATE",   isStandard: false },
+      { name: "FXT-PLATE",     isStandard: false, opPreset: "standard", qtyRule: "one"      },
+      { name: "BOLSTER-PLATE", isStandard: false, opPreset: "standard", qtyRule: "one"      },
+      { name: "WEAR-PLATE",    isStandard: false, opPreset: "laser",    qtyRule: "cavities" },
     ],
   },
   {
     code: "PBX",
     fullName: "Pressure Box",
     parts: [
-      { name: "BASKET",       isStandard: false },
-      { name: "BASKET-PLATE", isStandard: false },
-      { name: "EXTRUSIONS",   isStandard: false },
-      { name: "PNP-FRAME",    isStandard: false },
+      { name: "BASKET",       isStandard: false, opPreset: "standard",   qtyRule: "cavities" },
+      { name: "BASKET-PLATE", isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "EXTRUSIONS",   isStandard: false, opPreset: "standard",   qtyRule: "one"      },
+      { name: "PNP-FRAME",    isStandard: false, opPreset: "pnp-frame",  qtyRule: "one"      },
     ],
   },
 ];

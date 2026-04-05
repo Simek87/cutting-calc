@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragEndEvent,
@@ -12,7 +13,6 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "./KanbanColumn";
 import { ToolCard } from "./ToolCard";
-import { CreateToolDialog } from "./CreateToolDialog";
 import { Tool, TOOL_STATUSES, ToolStatus } from "@/lib/types";
 
 interface KanbanBoardProps {
@@ -29,6 +29,7 @@ const C = {
 };
 
 export function KanbanBoard({ initialTools }: KanbanBoardProps) {
+  const router = useRouter();
   const [tools, setTools] = useState<Tool[]>(initialTools);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -64,10 +65,6 @@ export function KanbanBoard({ initialTools }: KanbanBoardProps) {
     },
     [tools]
   );
-
-  const handleToolCreated = (tool: Tool) => {
-    setTools((prev) => [tool, ...prev]);
-  };
 
   const handleToolDeleted = (toolId: string) => {
     setTools((prev) => prev.filter((t) => t.id !== toolId));
@@ -117,7 +114,22 @@ export function KanbanBoard({ initialTools }: KanbanBoardProps) {
           }}
         />
         <div style={{ marginLeft: "auto" }}>
-          <CreateToolDialog onCreated={handleToolCreated} />
+          <button
+            onClick={() => router.push("/tools/new")}
+            style={{
+              padding: "6px 14px",
+              fontSize: 13,
+              fontWeight: 600,
+              backgroundColor: "rgba(232,160,32,0.10)",
+              color: "#e8a020",
+              border: "1px solid rgba(232,160,32,0.3)",
+              borderRadius: 5,
+              cursor: "pointer",
+              fontFamily: "var(--font-jetbrains-mono)",
+            }}
+          >
+            + New Tool
+          </button>
         </div>
       </div>
 
