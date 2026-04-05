@@ -109,6 +109,70 @@ async function main() {
     }
   }
 
+  // ── Design Reference categories ──────────────────────────────────────────
+
+  console.log("\nSeeding Design Reference…");
+
+  const referenceData = [
+    {
+      name: "Shrinkage",
+      icon: "📏",
+      entries: [
+        { label: "PP",   value: "1.5-2.0", unit: "%",  notes: null },
+        { label: "PET",  value: "0.3-0.5", unit: "%",  notes: null },
+        { label: "PS",   value: "0.4-0.6", unit: "%",  notes: null },
+        { label: "PLA",  value: "0.3-0.5", unit: "%",  notes: null },
+        { label: "CPET", value: "0.3-0.5", unit: "%",  notes: null },
+      ],
+    },
+    {
+      name: "Blade Standards",
+      icon: "🔪",
+      entries: [
+        { label: "Blade offset from edge", value: "0.3",  unit: "mm",  notes: null },
+        { label: "Blade holder height",    value: "TBD",  unit: "mm",  notes: null },
+        { label: "Blade type standard",    value: "TBD",  unit: null,  notes: null },
+      ],
+    },
+    {
+      name: "Tool Limits — KMD 78.2",
+      icon: "⚙️",
+      entries: [
+        { label: "Max tool size",    value: "TBD", unit: "mm", notes: null },
+        { label: "Max moulding size",value: "TBD", unit: "mm", notes: null },
+        { label: "Web minimum",      value: "TBD", unit: "mm", notes: null },
+        { label: "Gap standard",     value: "TBD", unit: "mm", notes: null },
+      ],
+    },
+    {
+      name: "General Design",
+      icon: "📐",
+      entries: [
+        { label: "Draft angle minimum",   value: "3",   unit: "deg", notes: null },
+        { label: "Corner radius minimum", value: "0.5", unit: "mm",  notes: null },
+      ],
+    },
+  ];
+
+  for (let i = 0; i < referenceData.length; i++) {
+    const rd = referenceData[i];
+    const existing = await prisma.referenceCategory.findFirst({ where: { name: rd.name } });
+    if (existing) {
+      console.log(`  ↺  ${rd.name} (already exists — skipping)`);
+      continue;
+    }
+    const cat = await prisma.referenceCategory.create({
+      data: { name: rd.name, icon: rd.icon, order: i },
+    });
+    for (let j = 0; j < rd.entries.length; j++) {
+      const e = rd.entries[j];
+      await prisma.referenceEntry.create({
+        data: { categoryId: cat.id, label: e.label, value: e.value, unit: e.unit, notes: e.notes, order: j },
+      });
+    }
+    console.log(`  ✓  ${rd.name} — ${rd.entries.length} entries`);
+  }
+
   console.log("\nDone.");
 }
 
