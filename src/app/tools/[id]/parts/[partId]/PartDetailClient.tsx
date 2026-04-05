@@ -251,6 +251,11 @@ export function PartDetailClient({
   const [annotator, setAnnotator] = useState<{ url: string; name: string } | null>(null);
   const isReadOnly = tool.archived ?? false;
 
+  // ── Add / delete operation state ──────────────────────────────────────────
+  const [addingOp, setAddingOp] = useState(false);
+  const [newOpName, setNewOpName] = useState("");
+  const [newOpType, setNewOpType] = useState("internal");
+
   // Material form
   const [matForm, setMatForm] = useState({
     materialType: part.materialType ?? "",
@@ -313,6 +318,41 @@ export function PartDetailClient({
       body: JSON.stringify(data),
     });
   }, []);
+
+  const handleDeleteOp = useCallback(async (opId: string) => {
+    if (!confirm("Delete this operation?")) return;
+    await fetch(`/api/operations/${opId}`, { method: "DELETE" });
+    setPart((p) => ({ ...p, operations: p.operations.filter((op) => op.id !== opId) }));
+  }, []);
+
+  const handleAddOp = useCallback(async () => {
+    if (!newOpName.trim()) return;
+    const nextOrder = part.operations.length > 0
+      ? Math.max(...part.operations.map((o) => o.order)) + 1
+      : 1;
+    const res = await fetch(`/api/parts/${part.id}/operations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newOpName.trim(), type: newOpType, order: nextOrder }),
+    });
+    const op = await res.json();
+    setPart((p) => ({
+      ...p,
+      operations: [...p.operations, {
+        ...op,
+        machine: op.machine ?? null,
+        estimatedTime: op.estimatedTime ?? null,
+        actualTime: op.actualTime ?? null,
+        changedBy: null,
+        statusChangedAt: null,
+        programRevision: null,
+        programRevNote: null,
+        toolList: null,
+      }],
+    }));
+    setNewOpName("");
+    setAddingOp(false);
+  }, [newOpName, newOpType, part.id, part.operations]);
 
   // ── Material save ──
 
@@ -537,10 +577,10 @@ export function PartDetailClient({
 
         {/* ── Operations ── */}
         <Section title="Operations">
-          {part.operations.length === 0 ? (
+          {part.operations.length === 0 && !addingOp && (
             <p className="px-4 py-4 text-sm" style={{ color: C.textMuted }}>No operations.</p>
-          ) : (
-            part.operations.map((op, idx) => {
+          )}
+          {part.operations.length > 0 && part.operations.map((op, idx) => {
               const isMilling = isMillingOp(op);
               const statusOptions = OP_STATUS_OPTIONS[op.type] ?? ["NotStarted", "Done"];
               return (
@@ -584,6 +624,16 @@ export function PartDetailClient({
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => handleDeleteOp(op.id)}
+                        className="text-xs px-1.5 py-0.5 rounded flex-shrink-0 hover:opacity-80"
+                        style={{ color: "#fca5a5", border: "1px solid rgba(239,68,68,0.25)" }}
+                        title="Delete operation"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
 
                   {/* Row 2: machine, estimated time */}
@@ -693,7 +743,59 @@ export function PartDetailClient({
                   )}
                 </div>
               );
-            })
+            })}
+
+          {/* Inline new-operation form */}
+          {addingOp && (
+            <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="text"
+                  value={newOpName}
+                  onChange={(e) => setNewOpName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddOp(); if (e.key === "Escape") { setAddingOp(false); setNewOpName(""); } }}
+                  placeholder="Operation name (e.g. Milling)"
+                  autoFocus
+                  className="text-xs rounded px-2 py-1 outline-none"
+                  style={{ backgroundColor: C.bg, color: C.text, border: `1px solid ${C.accentBorder}`, width: 200 }}
+                />
+                <select
+                  value={newOpType}
+                  onChange={(e) => setNewOpType(e.target.value)}
+                  className="text-xs rounded px-2 py-1 outline-none"
+                  style={{ backgroundColor: C.bg, color: C.text, border: `1px solid ${C.border}`, appearance: "none", paddingRight: 24 }}
+                >
+                  <option value="internal">Internal</option>
+                  <option value="procurement">Procurement</option>
+                  <option value="outsource">Outsource</option>
+                  <option value="inspection">Inspection</option>
+                  <option value="assembly">Assembly</option>
+                </select>
+                <button onClick={handleAddOp} disabled={!newOpName.trim()}
+                  className="text-xs px-3 py-1 rounded disabled:opacity-50"
+                  style={{ backgroundColor: C.accentDim, color: C.accent, border: `1px solid ${C.accentBorder}` }}>
+                  Add
+                </button>
+                <button onClick={() => { setAddingOp(false); setNewOpName(""); }}
+                  className="text-xs px-3 py-1 rounded"
+                  style={{ color: C.textDim, border: `1px solid ${C.border}` }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Add operation button */}
+          {!isReadOnly && !addingOp && (
+            <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.border}` }}>
+              <button
+                onClick={() => setAddingOp(true)}
+                className="text-xs px-3 py-1.5 rounded hover:opacity-80"
+                style={{ color: C.accent, border: `1px solid ${C.accentBorder}`, backgroundColor: C.accentDim }}
+              >
+                + Add Operation
+              </button>
+            </div>
           )}
         </Section>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -194,61 +194,82 @@ function PartCard({
   part,
   toolId,
   showConversion,
+  onDelete,
 }: {
   part: ToolPart;
   toolId: string;
   showConversion: boolean;
+  onDelete: (id: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const secStyle = part.section ? getSectionStyle(part.section.name) : null;
 
   return (
-    <Link
-      href={`/tools/${toolId}/parts/${part.id}`}
-      className="block rounded-lg p-3"
-      style={{
-        backgroundColor: C.surface2,
-        border: `1px solid ${hovered ? C.accentBorder : C.border}`,
-        transition: "border-color 0.15s",
-      }}
+    <div style={{ position: "relative" }}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <span
-          className="text-xs font-semibold leading-tight break-words"
-          style={{ color: C.accent, fontFamily: "var(--font-jetbrains-mono)" }}
-        >
-          {part.name}
-        </span>
-        {showConversion && <ConvBadge status={part.conversionStatus} />}
-      </div>
-
-      {part.section && secStyle && (
-        <div className="mb-2">
+      onMouseLeave={() => setHovered(false)}>
+      <Link
+        href={`/tools/${toolId}/parts/${part.id}`}
+        className="block rounded-lg p-3"
+        style={{
+          backgroundColor: C.surface2,
+          border: `1px solid ${hovered ? C.accentBorder : C.border}`,
+          transition: "border-color 0.15s",
+        }}
+      >
+        <div className="flex items-start justify-between gap-2 mb-1.5">
           <span
-            className="text-xs px-1.5 py-0.5 rounded"
-            style={{ backgroundColor: secStyle.bg, color: secStyle.text }}
+            className="text-xs font-semibold leading-tight break-words"
+            style={{ color: C.accent, fontFamily: "var(--font-jetbrains-mono)" }}
           >
-            {toSectionCode(part.section.name)}
+            {part.name}
           </span>
+          {showConversion && <ConvBadge status={part.conversionStatus} />}
         </div>
-      )}
 
-      {part.operations.length > 0 && (
-        <div className="flex gap-1 flex-wrap">
-          {part.operations.map((op) => (
-            <OpPip key={op.id} status={op.status} />
-          ))}
-        </div>
-      )}
+        {part.section && secStyle && (
+          <div className="mb-2">
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: secStyle.bg, color: secStyle.text }}
+            >
+              {toSectionCode(part.section.name)}
+            </span>
+          </div>
+        )}
 
-      {part.operations.length === 0 && (
-        <span className="text-xs" style={{ color: C.textMuted }}>
-          No operations
-        </span>
+        {part.operations.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {part.operations.map((op) => (
+              <OpPip key={op.id} status={op.status} />
+            ))}
+          </div>
+        )}
+
+        {part.operations.length === 0 && (
+          <span className="text-xs" style={{ color: C.textMuted }}>
+            No operations
+          </span>
+        )}
+      </Link>
+      {/* Delete button — outside Link to avoid navigation */}
+      {hovered && (
+        <button
+          onClick={(e) => { e.preventDefault(); onDelete(part.id); }}
+          style={{
+            position: "absolute", top: 6, right: 6,
+            width: 18, height: 18, borderRadius: 3,
+            fontSize: 10, fontWeight: 700,
+            backgroundColor: "rgba(239,68,68,0.15)",
+            color: "#fca5a5", border: "1px solid rgba(239,68,68,0.3)",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          title="Delete part"
+        >
+          ✕
+        </button>
       )}
-    </Link>
+    </div>
   );
 }
 
@@ -262,9 +283,80 @@ export function ToolDetailClient({
   activityLogs: ActivityLog[];
 }) {
   const router = useRouter();
-  const [tool] = useState(initialTool);
+  const [tool, setTool] = useState(initialTool);
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+
+  // ── Section/part add state ─────────────────────────────────────────────────
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [newSectionName, setNewSectionName] = useState("");
+  const [addingPartFor, setAddingPartFor] = useState<string | null>(null); // sectionId or "__none"
+  const [newPartName, setNewPartName] = useState("");
+  const addSectionRef = useRef<HTMLInputElement>(null);
+  const addPartRef = useRef<HTMLInputElement>(null);
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
+  const handleDeleteTool = async () => {
+    if (!confirm(`Delete "${tool.projectName}" permanently? This cannot be undone.`)) return;
+    await fetch(`/api/tools/${tool.id}`, { method: "DELETE" });
+    router.push("/");
+  };
+
+  const handleAddSection = async () => {
+    const name = newSectionName.trim();
+    if (!name) return;
+    const res = await fetch("/api/sections", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, toolId: tool.id }),
+    });
+    const section = await res.json();
+    setTool(t => ({ ...t, sections: [...t.sections, section] }));
+    setNewSectionName("");
+    setShowAddSection(false);
+  };
+
+  const handleDeleteSection = async (sectionId: string) => {
+    const sec = tool.sections.find(s => s.id === sectionId);
+    const count = tool.parts.filter(p => p.sectionId === sectionId).length;
+    const msg = count > 0
+      ? `Delete section "${sec?.name}" and its ${count} part(s)? Parts will also be deleted.`
+      : `Delete section "${sec?.name}"?`;
+    if (!confirm(msg)) return;
+    await fetch(`/api/sections/${sectionId}`, { method: "DELETE" });
+    setTool(t => ({
+      ...t,
+      sections: t.sections.filter(s => s.id !== sectionId),
+      parts: t.parts.filter(p => p.sectionId !== sectionId),
+    }));
+  };
+
+  const handleAddPart = async (sectionId: string | null) => {
+    const name = newPartName.trim();
+    if (!name) return;
+    const res = await fetch(`/api/tools/${tool.id}/parts`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, sectionId, template: "none" }),
+    });
+    const part = await res.json();
+    setTool(t => ({
+      ...t,
+      parts: [...t.parts, {
+        id: part.id, name: part.name, sectionId: part.sectionId,
+        section: sectionId ? (t.sections.find(s => s.id === sectionId) ?? null) : null,
+        conversionStatus: "New", operations: [],
+      }],
+    }));
+    setNewPartName("");
+    setAddingPartFor(null);
+  };
+
+  const handleDeletePart = async (partId: string) => {
+    const part = tool.parts.find(p => p.id === partId);
+    if (!confirm(`Delete part "${part?.name}"?`)) return;
+    await fetch(`/api/parts/${partId}`, { method: "DELETE" });
+    setTool(t => ({ ...t, parts: t.parts.filter(p => p.id !== partId) }));
+  };
 
   const handleArchive = async () => {
     if (!confirm(`Archive "${tool.projectName}"? It will be hidden from the dashboard.`)) return;
@@ -288,11 +380,18 @@ export function ToolDetailClient({
     router.push("/");
   };
 
-  // Group parts by section
+  // Group parts by section — sort in template order
+  const SECTION_ORDER = ["MLD", "PLG", "CUT", "AVL", "PBX"];
+  const sortedSections = [...tool.sections].sort((a, b) => {
+    const ia = SECTION_ORDER.indexOf(a.name.toUpperCase());
+    const ib = SECTION_ORDER.indexOf(b.name.toUpperCase());
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
   const assignedIds = new Set<string>();
   const grouped: { section: { id: string; name: string } | null; parts: ToolPart[] }[] = [];
 
-  tool.sections.forEach((sec) => {
+  sortedSections.forEach((sec) => {
     const parts = tool.parts.filter((p) => p.sectionId === sec.id);
     parts.forEach((p) => assignedIds.add(p.id));
     grouped.push({ section: sec, parts });
@@ -373,7 +472,7 @@ export function ToolDetailClient({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
               <a
                 href={`/api/process-card/project/${tool.id}`}
                 download
@@ -382,6 +481,18 @@ export function ToolDetailClient({
               >
                 Export PDF
               </a>
+              {!tool.archived && (
+                <button
+                  onClick={() => {
+                    setShowAddSection(true);
+                    setTimeout(() => addSectionRef.current?.focus(), 50);
+                  }}
+                  className="text-xs px-3 py-1.5 rounded"
+                  style={{ color: C.accent, border: `1px solid ${C.accentBorder}`, backgroundColor: C.accentDim }}
+                >
+                  + Add Section
+                </button>
+              )}
               {tool.archived ? (
                 <button
                   onClick={handleRestore}
@@ -401,28 +512,62 @@ export function ToolDetailClient({
                   {archiving ? "Archiving…" : "Archive"}
                 </button>
               )}
+              <button
+                onClick={handleDeleteTool}
+                className="text-xs px-3 py-1.5 rounded"
+                style={{ color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}
+                title="Delete tool permanently"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
 
+        {/* Add Section inline form */}
+        {showAddSection && (
+          <div className="flex items-center gap-2 mb-4">
+            <input
+              ref={addSectionRef}
+              type="text"
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleAddSection(); if (e.key === "Escape") { setShowAddSection(false); setNewSectionName(""); } }}
+              placeholder="Section name (e.g. MLD)"
+              className="rounded px-3 py-1.5 text-sm outline-none"
+              style={{ backgroundColor: C.surface, border: `1px solid ${C.accentBorder}`, color: C.text, width: 220 }}
+            />
+            <button onClick={handleAddSection} disabled={!newSectionName.trim()}
+              className="text-xs px-3 py-1.5 rounded disabled:opacity-50"
+              style={{ backgroundColor: C.accentDim, color: C.accent, border: `1px solid ${C.accentBorder}` }}>
+              Add
+            </button>
+            <button onClick={() => { setShowAddSection(false); setNewSectionName(""); }}
+              className="text-xs px-3 py-1.5 rounded"
+              style={{ color: C.textDim, border: `1px solid ${C.border}` }}>
+              Cancel
+            </button>
+          </div>
+        )}
+
         {/* Parts by section */}
         <div className="space-y-6">
-          {tool.parts.length === 0 && (
+          {tool.parts.length === 0 && tool.sections.length === 0 && (
             <p className="text-sm text-center py-12" style={{ color: C.textMuted }}>
-              No parts yet.
+              No sections or parts yet. Click &ldquo;+ Add Section&rdquo; to get started.
             </p>
           )}
 
           {grouped.map(({ section, parts }) => {
-            if (parts.length === 0 && section !== null) return null;
             const code = section ? toSectionCode(section.name) : null;
             const ss = section ? getSectionStyle(section.name) : null;
+            const isAddingHere = addingPartFor === (section?.id ?? "__none");
 
             return (
               <div key={section?.id ?? "__unassigned"}>
                 {section && ss && (
                   <div
-                    className="flex items-center gap-3 px-4 py-2.5 rounded-t-lg"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-t-lg"
                     style={{
                       backgroundColor: ss.header,
                       border: `1px solid ${ss.border}`,
@@ -442,6 +587,31 @@ export function ToolDetailClient({
                     <span className="text-xs" style={{ color: C.textMuted }}>
                       {parts.length} {parts.length === 1 ? "part" : "parts"}
                     </span>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      {!tool.archived && (
+                        <button
+                          onClick={() => {
+                            setAddingPartFor(section.id);
+                            setNewPartName("");
+                            setTimeout(() => addPartRef.current?.focus(), 50);
+                          }}
+                          className="text-xs px-2 py-0.5 rounded"
+                          style={{ color: ss.text, border: `1px solid ${ss.border}`, backgroundColor: "rgba(0,0,0,0.2)", opacity: 0.75 }}
+                        >
+                          + Part
+                        </button>
+                      )}
+                      {!tool.archived && (
+                        <button
+                          onClick={() => handleDeleteSection(section.id)}
+                          className="text-xs px-2 py-0.5 rounded"
+                          style={{ color: "#fca5a5", border: "1px solid rgba(239,68,68,0.25)", backgroundColor: "rgba(0,0,0,0.2)", opacity: 0.7 }}
+                          title="Delete section"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -466,19 +636,46 @@ export function ToolDetailClient({
                       : {}),
                   }}
                 >
-                  {parts.length === 0 ? (
+                  {parts.length === 0 && !isAddingHere && (
                     <p className="text-xs col-span-full py-2" style={{ color: C.textMuted }}>
                       No parts in this section.
                     </p>
-                  ) : (
-                    parts.map((part) => (
-                      <PartCard
-                        key={part.id}
-                        part={part}
-                        toolId={tool.id}
-                        showConversion={isConversion}
+                  )}
+
+                  {parts.map((part) => (
+                    <PartCard
+                      key={part.id}
+                      part={part}
+                      toolId={tool.id}
+                      showConversion={isConversion}
+                      onDelete={handleDeletePart}
+                    />
+                  ))}
+
+                  {/* Inline add-part form */}
+                  {isAddingHere && (
+                    <div className="col-span-full flex items-center gap-2 pt-1">
+                      <input
+                        ref={addPartRef}
+                        type="text"
+                        value={newPartName}
+                        onChange={(e) => setNewPartName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAddPart(section?.id ?? null); if (e.key === "Escape") { setAddingPartFor(null); setNewPartName(""); } }}
+                        placeholder="Part name (e.g. CAVITY)"
+                        className="rounded px-3 py-1.5 text-xs outline-none"
+                        style={{ backgroundColor: C.bg, border: `1px solid ${C.accentBorder}`, color: C.text, width: 200 }}
                       />
-                    ))
+                      <button onClick={() => handleAddPart(section?.id ?? null)} disabled={!newPartName.trim()}
+                        className="text-xs px-2.5 py-1.5 rounded disabled:opacity-50"
+                        style={{ backgroundColor: C.accentDim, color: C.accent, border: `1px solid ${C.accentBorder}` }}>
+                        Add
+                      </button>
+                      <button onClick={() => { setAddingPartFor(null); setNewPartName(""); }}
+                        className="text-xs px-2.5 py-1.5 rounded"
+                        style={{ color: C.textDim, border: `1px solid ${C.border}` }}>
+                        Cancel
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

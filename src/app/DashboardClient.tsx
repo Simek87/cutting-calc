@@ -9,6 +9,8 @@ import {
   inferOutsourceEmailType,
   findSupplierByCategory,
 } from "@/lib/email";
+import { SECTION_TEMPLATES, OP_PRESETS, type OpPreset, type QtyRule } from "@/lib/operation-templates";
+import { TOOL_STATUSES, type ToolStatus } from "@/lib/types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -368,105 +370,243 @@ function MaterialOrderModal({
   );
 }
 
-// ── New Project Modal ──────────────────────────────────────────────────────
+// ── New Project Modal — 3-step wizard ─────────────────────────────────────
+
+type WizardProjectType = "NewTool" | "Conversion" | "Blank";
+type WizardConvStatus = "New" | "Reuse" | "Rework";
+interface WizardPart {
+  name: string; isStandard: boolean; opPreset: OpPreset; qtyRule: QtyRule;
+  qty: number; include: boolean; conversionStatus: WizardConvStatus;
+}
+interface WizardSection { code: string; fullName: string; parts: WizardPart[]; collapsed: boolean; }
+
+function buildWizardSections(cavities: number): WizardSection[] {
+  return SECTION_TEMPLATES.map((s) => ({
+    code: s.code, fullName: s.fullName, collapsed: false,
+    parts: s.parts.map((p) => ({
+      name: p.name, isStandard: p.isStandard, opPreset: p.opPreset, qtyRule: p.qtyRule,
+      qty: p.qtyRule === "cavities" ? cavities : 1,
+      include: true, conversionStatus: "New" as WizardConvStatus,
+    })),
+  }));
+}
+
+const W = {
+  border: "#2a2d30", accent: "#e8a020", accentDim: "rgba(232,160,32,0.10)",
+  accentBorder: "rgba(232,160,32,0.3)", textDim: "#8b9196", textMuted: "#4e5560",
+};
+const winput: React.CSSProperties = {
+  width: "100%", padding: "7px 10px", fontSize: 12,
+  backgroundColor: C.bg, color: C.text, border: `1px solid ${W.border}`,
+  borderRadius: 4, outline: "none", boxSizing: "border-box",
+};
 
 function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
-  const [form, setForm] = useState({ projectName: "", dueDate: "", status: "Management" });
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [projectType, setProjectType] = useState<WizardProjectType>("NewTool");
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState({ projectName: "", cavities: 1, dueDate: "", machineTarget: "KMD 78.2", status: "Management" as ToolStatus });
+  const [sections, setSections] = useState<WizardSection[]>(buildWizardSections(1));
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (step === 2) setTimeout(() => nameRef.current?.focus(), 50); }, [step]);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const toStep3 = () => {
     if (!form.projectName.trim()) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/tools", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const tool = await res.json();
-      onCreated(tool.id);
-      onClose();
-    } finally {
-      setLoading(false);
-    }
+    setSections(s => s.map(sec => ({
+      ...sec,
+      parts: sec.parts.map(p => p.qtyRule === "cavities" ? { ...p, qty: form.cavities } : p),
+    })));
+    setStep(3);
   };
 
+  const submit = async (sectOverride?: WizardSection[]) => {
+    if (loading) return;
+    setLoading(true);
+    const active = (sectOverride ?? sections)
+      .map(s => ({ code: s.code, parts: s.parts.filter(p => p.include).map(p => ({ name: p.name, isStandard: p.isStandard, opPreset: p.opPreset, qty: p.qty, conversionStatus: p.conversionStatus })) }))
+      .filter(s => s.parts.length > 0);
+    try {
+      const res = await fetch("/api/tools/create-from-template", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectName: form.projectName.trim(), projectType: projectType === "Blank" ? "NewTool" : projectType, cavities: form.cavities, dueDate: form.dueDate || null, machineTarget: form.machineTarget, status: form.status, sections: projectType === "Blank" ? [] : active }),
+      });
+      if (!res.ok) throw new Error();
+      const { id } = await res.json();
+      onCreated(id); onClose();
+    } finally { setLoading(false); }
+  };
+
+  const totalParts = sections.reduce((a, s) => a + s.parts.filter(p => p.include).length, 0);
+
+  const modalWidth = step === 3 ? 680 : 440;
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="rounded-lg w-full max-w-sm p-6"
-        style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}
-      >
-        <h2 className="text-sm font-semibold mb-4" style={{ color: C.text }}>
-          New Project{" "}
-          <span className="text-xs font-normal" style={{ color: C.textMuted }}>
-            Ctrl+N
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full rounded-lg flex flex-col" style={{ maxWidth: modalWidth, maxHeight: "90vh", backgroundColor: C.surface, border: `1px solid ${W.border}`, overflow: "hidden" }}>
+
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0" style={{ borderBottom: `1px solid ${W.border}` }}>
+          <span className="text-sm font-semibold" style={{ color: C.text }}>
+            New Project
+            <span className="text-xs font-normal ml-2" style={{ color: W.textMuted }}>Ctrl+N</span>
           </span>
-        </h2>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-xs mb-1" style={{ color: C.textDim }}>
-              Project Name *
-            </label>
-            <input
-              ref={inputRef}
-              type="text"
-              value={form.projectName}
-              onChange={(e) => setForm({ ...form, projectName: e.target.value })}
-              placeholder="e.g. AFS700"
-              className="w-full px-3 py-2 text-sm rounded outline-none"
-              style={{
-                backgroundColor: C.bg,
-                color: C.text,
-                border: `1px solid ${C.border}`,
-                fontFamily: "var(--font-jetbrains-mono)",
-              }}
-            />
+          {/* Step dots */}
+          <div className="flex items-center gap-1.5">
+            {([1, 2, 3] as const).map(n => (
+              <div key={n} style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: step >= n ? W.accent : W.border, transition: "background-color 0.15s" }} />
+            ))}
           </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: C.textDim }}>
-              Due Date
-            </label>
-            <input
-              type="date"
-              value={form.dueDate}
-              onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-              className="w-full px-3 py-2 text-sm rounded outline-none"
-              style={{
-                backgroundColor: C.bg,
-                color: C.text,
-                border: `1px solid ${C.border}`,
-                colorScheme: "dark",
-              }}
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs rounded"
-              style={{ color: C.textDim, border: `1px solid ${C.border}` }}
-            >
-              Cancel
+        </div>
+
+        {/* Modal body — scrollable */}
+        <div className="overflow-y-auto flex-1 p-5">
+
+          {/* Step 1 — type selection */}
+          {step === 1 && (
+            <div className="space-y-2">
+              <p className="text-xs mb-3" style={{ color: W.textDim }}>Choose project type:</p>
+              {([ ["NewTool", "New Tool — KMD 78.2", "Full template: 5 sections + default parts & ops"], ["Conversion", "Conversion — KMD 78.2", "Same template, conversion status on all parts"], ["Blank", "Blank Tool", "Empty tool, add sections and parts manually"] ] as [WizardProjectType, string, string][]).map(([type, title, desc]) => (
+                <div key={type} onClick={() => { setProjectType(type); setStep(2); }}
+                  style={{ padding: "12px 14px", borderRadius: 6, cursor: "pointer", border: `1px solid ${projectType === type ? W.accent : W.border}`, backgroundColor: projectType === type ? W.accentDim : "rgba(255,255,255,0.02)", transition: "all 0.12s" }}>
+                  <div className="text-xs font-semibold mb-0.5" style={{ color: projectType === type ? W.accent : C.text, fontFamily: "var(--font-jetbrains-mono)" }}>{title}</div>
+                  <div className="text-xs" style={{ color: W.textDim }}>{desc}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Step 2 — details */}
+          {step === 2 && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: W.textDim }}>Tool Name *</label>
+                <input ref={nameRef} type="text" style={winput} value={form.projectName}
+                  onChange={e => setForm(f => ({ ...f, projectName: e.target.value }))}
+                  placeholder="e.g. AFS700" onKeyDown={e => { if (e.key === "Enter") toStep3(); }} />
+              </div>
+              {projectType !== "Blank" && (
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: W.textDim }}>Cavities</label>
+                  <input type="number" style={winput} min={1} max={64} value={form.cavities}
+                    onChange={e => setForm(f => ({ ...f, cavities: Math.max(1, parseInt(e.target.value) || 1) }))} />
+                  <p className="text-xs mt-1" style={{ color: W.textMuted }}>Sets qty: CAVITY, PLUG, PLUG-SHAFT, BLADE, WEAR-PLATE, BASKET</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs mb-1" style={{ color: W.textDim }}>Due Date</label>
+                <input type="date" style={{ ...winput, colorScheme: "dark" }} value={form.dueDate}
+                  onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: W.textDim }}>Machine Target</label>
+                <input type="text" style={winput} value={form.machineTarget}
+                  onChange={e => setForm(f => ({ ...f, machineTarget: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: W.textDim }}>Initial Status</label>
+                <select style={{ ...winput, appearance: "none" }} value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value as ToolStatus }))}>
+                  {TOOL_STATUSES.map(s => <option key={s} value={s} style={{ backgroundColor: C.bg }}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3 — sections/parts */}
+          {step === 3 && (
+            <div>
+              <p className="text-xs mb-3" style={{ color: W.textDim }}>
+                {totalParts} parts selected. Uncheck what you don&apos;t need.
+                {projectType === "Conversion" && <span style={{ color: "#60a5fa" }}> Conversion status per part.</span>}
+              </p>
+              <div className="space-y-2">
+                {sections.map(section => {
+                  const allChk = section.parts.every(p => p.include);
+                  const someChk = section.parts.some(p => p.include);
+                  return (
+                    <div key={section.code} style={{ border: `1px solid ${W.border}`, borderRadius: 5, overflow: "hidden" }}>
+                      <div className="flex items-center gap-2 px-3 py-2 cursor-pointer"
+                        style={{ backgroundColor: "rgba(255,255,255,0.03)", borderBottom: section.collapsed ? "none" : `1px solid ${W.border}` }}
+                        onClick={() => setSections(s => s.map(x => x.code === section.code ? { ...x, collapsed: !x.collapsed } : x))}>
+                        <input type="checkbox" checked={allChk}
+                          ref={(el) => { if (el) el.indeterminate = !allChk && someChk; }}
+                          onChange={e => { e.stopPropagation(); setSections(s => s.map(x => x.code === section.code ? { ...x, parts: x.parts.map(p => ({ ...p, include: e.target.checked })) } : x)); }}
+                          onClick={e => e.stopPropagation()} style={{ accentColor: W.accent, cursor: "pointer" }} />
+                        <span className="text-xs font-bold" style={{ color: W.accent, fontFamily: "var(--font-jetbrains-mono)" }}>{section.code}</span>
+                        <span className="text-xs" style={{ color: W.textDim }}>{section.fullName}</span>
+                        <span className="ml-auto text-xs" style={{ color: W.textMuted }}>{section.parts.filter(p => p.include).length}/{section.parts.length}</span>
+                        <span className="text-xs" style={{ color: W.textMuted }}>{section.collapsed ? "▶" : "▼"}</span>
+                      </div>
+                      {!section.collapsed && (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                          <tbody>
+                            {section.parts.map((part, idx) => (
+                              <tr key={part.name} style={{ backgroundColor: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)", opacity: part.include ? 1 : 0.4 }}>
+                                <td style={{ padding: "4px 8px", width: 28 }}>
+                                  <input type="checkbox" checked={part.include} style={{ accentColor: W.accent, cursor: "pointer" }}
+                                    onChange={() => setSections(s => s.map(x => x.code === section.code ? { ...x, parts: x.parts.map(p => p.name === part.name ? { ...p, include: !p.include } : p) } : x))} />
+                                </td>
+                                <td style={{ padding: "4px 8px", color: part.isStandard ? W.textDim : C.text, fontFamily: "var(--font-jetbrains-mono)" }}>
+                                  {part.name}{part.isStandard && <span className="ml-1.5 text-xs" style={{ color: W.textMuted, border: `1px solid ${W.border}`, borderRadius: 2, padding: "0 3px" }}>STD</span>}
+                                </td>
+                                <td style={{ padding: "4px 8px", textAlign: "center", width: 56 }}>
+                                  {part.qtyRule === "tbd" ? (
+                                    <input type="number" min={1} value={part.qty} disabled={!part.include}
+                                      onChange={e => setSections(s => s.map(x => x.code === section.code ? { ...x, parts: x.parts.map(p => p.name === part.name ? { ...p, qty: Math.max(1, parseInt(e.target.value) || 1) } : p) } : x))}
+                                      style={{ width: 44, padding: "2px 4px", fontSize: 11, backgroundColor: C.bg, color: C.text, border: `1px solid ${W.border}`, borderRadius: 3, outline: "none", textAlign: "center" }} />
+                                  ) : (
+                                    <span style={{ color: part.qtyRule === "cavities" ? W.accent : W.textDim }}>{part.qty}</span>
+                                  )}
+                                </td>
+                                {projectType === "Conversion" && (
+                                  <td style={{ padding: "4px 8px", width: 90 }}>
+                                    <select value={part.conversionStatus} disabled={!part.include}
+                                      onChange={e => setSections(s => s.map(x => x.code === section.code ? { ...x, parts: x.parts.map(p => p.name === part.name ? { ...p, conversionStatus: e.target.value as WizardConvStatus } : p) } : x))}
+                                      style={{ fontSize: 10, padding: "2px 4px", backgroundColor: C.bg, color: part.conversionStatus === "New" ? W.accent : part.conversionStatus === "Rework" ? "#f97316" : "#22c55e", border: `1px solid ${W.border}`, borderRadius: 3, outline: "none", cursor: "pointer", appearance: "none" }}>
+                                      <option value="New">New</option><option value="Reuse">Reuse</option><option value="Rework">Rework</option>
+                                    </select>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal footer */}
+        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderTop: `1px solid ${W.border}` }}>
+          {step > 1
+            ? <button onClick={() => setStep(s => (s - 1) as 1 | 2 | 3)} className="text-xs px-3 py-1.5 rounded" style={{ color: W.textDim, border: `1px solid ${W.border}` }}>← Back</button>
+            : <button onClick={onClose} className="text-xs px-3 py-1.5 rounded" style={{ color: W.textDim, border: `1px solid ${W.border}` }}>Cancel</button>
+          }
+          {step === 1 && (
+            <button onClick={() => setStep(2)} className="text-xs px-4 py-1.5 rounded font-medium" style={{ backgroundColor: W.accentDim, color: W.accent, border: `1px solid ${W.accentBorder}`, fontFamily: "var(--font-jetbrains-mono)" }}>
+              Next →
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 text-xs rounded font-medium disabled:opacity-50"
-              style={{ backgroundColor: C.accent, color: "#000" }}
-            >
-              {loading ? "Creating…" : "Create"}
+          )}
+          {step === 2 && (
+            <button disabled={!form.projectName.trim() || loading} onClick={() => projectType === "Blank" ? submit() : toStep3()}
+              className="text-xs px-4 py-1.5 rounded font-medium disabled:opacity-50"
+              style={{ backgroundColor: W.accentDim, color: W.accent, border: `1px solid ${W.accentBorder}`, fontFamily: "var(--font-jetbrains-mono)" }}>
+              {loading ? "Creating…" : projectType === "Blank" ? "Create Tool" : "Next →"}
             </button>
-          </div>
-        </form>
+          )}
+          {step === 3 && (
+            <button disabled={loading || totalParts === 0} onClick={() => submit()}
+              className="text-xs px-4 py-1.5 rounded font-medium disabled:opacity-50"
+              style={{ backgroundColor: W.accentDim, color: W.accent, border: `1px solid ${W.accentBorder}`, fontFamily: "var(--font-jetbrains-mono)" }}>
+              {loading ? "Creating…" : `Create Tool (${totalParts} parts)`}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
