@@ -7,6 +7,30 @@ interface CreateToolDialogProps {
   onCreated: (tool: Tool) => void;
 }
 
+const C = {
+  bg: "#0d0f10",
+  surface: "#141618",
+  surface2: "#1c2024",
+  border: "#2a2d30",
+  accent: "#e8a020",
+  accentDim: "rgba(232,160,32,0.12)",
+  accentBorder: "rgba(232,160,32,0.3)",
+  text: "#e2e4e6",
+  textDim: "#8b9196",
+};
+
+const fieldStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "7px 10px",
+  fontSize: 13,
+  backgroundColor: C.bg,
+  color: C.text,
+  border: `1px solid ${C.border}`,
+  borderRadius: 5,
+  outline: "none",
+  boxSizing: "border-box",
+};
+
 export function CreateToolDialog({ onCreated }: CreateToolDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,65 +63,118 @@ export function CreateToolDialog({ onCreated }: CreateToolDialogProps) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+        style={{
+          padding: "6px 14px",
+          fontSize: 13,
+          fontWeight: 600,
+          backgroundColor: C.accentDim,
+          color: C.accent,
+          border: `1px solid ${C.accentBorder}`,
+          borderRadius: 5,
+          cursor: "pointer",
+        }}
       >
         + New Tool
       </button>
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.6)",
+          }}
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-base font-semibold mb-4">Create New Tool</h2>
-            <form onSubmit={handleSubmit} className="space-y-3">
+          <div
+            style={{
+              backgroundColor: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              width: "100%",
+              maxWidth: 360,
+              padding: "24px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+            }}
+          >
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 18 }}>
+              Create New Tool
+            </h2>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <label className="block text-sm font-medium mb-1">Project Name *</label>
+                <label style={{ display: "block", fontSize: 12, color: C.textDim, marginBottom: 5 }}>
+                  Tool Name *
+                </label>
                 <input
                   type="text"
                   value={form.projectName}
                   onChange={(e) => setForm({ ...form, projectName: e.target.value })}
-                  placeholder="e.g. Tray 400x300 PP"
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  placeholder="e.g. AFS700"
+                  style={fieldStyle}
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Due Date</label>
+                <label style={{ display: "block", fontSize: 12, color: C.textDim, marginBottom: 5 }}>
+                  Due Date
+                </label>
                 <input
                   type="date"
                   value={form.dueDate}
                   onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  style={fieldStyle}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Initial Status</label>
+                <label style={{ display: "block", fontSize: 12, color: C.textDim, marginBottom: 5 }}>
+                  Initial Status
+                </label>
                 <select
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value as ToolStatus })}
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  style={{ ...fieldStyle, appearance: "none" }}
                 >
                   {TOOL_STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s} style={{ backgroundColor: C.bg }}>{s}</option>
                   ))}
                 </select>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 4 }}>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
+                  style={{
+                    padding: "7px 16px",
+                    fontSize: 13,
+                    backgroundColor: "transparent",
+                    color: C.textDim,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 5,
+                    cursor: "pointer",
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  style={{
+                    padding: "7px 16px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    backgroundColor: C.accentDim,
+                    color: C.accent,
+                    border: `1px solid ${C.accentBorder}`,
+                    borderRadius: 5,
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.6 : 1,
+                  }}
                 >
-                  {loading ? "Creating..." : "Create"}
+                  {loading ? "Creating…" : "Create"}
                 </button>
               </div>
             </form>

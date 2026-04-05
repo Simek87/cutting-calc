@@ -12,6 +12,17 @@ interface ToolCardProps {
   onDeleted: (id: string) => void;
 }
 
+const C = {
+  surface: "#141618",
+  surface2: "#1a1d20",
+  border: "#2a2d30",
+  accent: "#e8a020",
+  accentDim: "rgba(232,160,32,0.12)",
+  text: "#e2e4e6",
+  textDim: "#8b9196",
+  textMuted: "#4e5560",
+};
+
 function getPartStage(part: Part): string {
   if (getPartBlockReasons(part).length > 0) return "Blocked";
   const ops = part.operations;
@@ -103,27 +114,63 @@ export function ToolCard({ tool, isDragging, onDeleted }: ToolCardProps) {
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      {...attributes}
-      className={`bg-white rounded border border-gray-200 shadow-sm group select-none ${
-        isDragging ? "shadow-lg rotate-1 cursor-grabbing" : ""
-      }`}
+      style={{
+        ...style,
+        backgroundColor: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: 6,
+        boxShadow: isDragging ? "0 8px 24px rgba(0,0,0,0.5)" : "none",
+        transform: isDragging ? `${CSS.Transform.toString(transform)} rotate(1deg)` : CSS.Transform.toString(transform),
+        cursor: isDragging ? "grabbing" : "default",
+        position: "relative",
+      }}
+      className="group"
     >
       {/* Drag handle */}
-      <div {...listeners} className="px-3 pt-2 pb-1 cursor-grab active:cursor-grabbing">
-        <div className="w-6 h-1 bg-gray-200 rounded mx-auto mb-2" />
+      <div
+        {...attributes}
+        {...listeners}
+        style={{
+          padding: "6px 10px 2px",
+          cursor: "grab",
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ width: 24, height: 3, backgroundColor: C.border, borderRadius: 2 }} />
       </div>
 
       {/* Clickable content */}
-      <div className="px-3 pb-3 cursor-pointer" onClick={() => router.push(`/tools/${tool.id}`)}>
-        <div className="flex items-start justify-between gap-1">
-          <span className="text-sm font-medium text-gray-800 leading-tight hover:text-blue-600">
+      <div
+        style={{ padding: "4px 10px 10px", cursor: "pointer" }}
+        onClick={() => router.push(`/tools/${tool.id}`)}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 4 }}>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: C.text,
+              lineHeight: 1.3,
+              fontFamily: "var(--font-jetbrains-mono)",
+            }}
+          >
             {tool.projectName}
           </span>
           <button
             onClick={handleDelete}
             onPointerDown={(e) => e.stopPropagation()}
-            className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 text-xs ml-1 shrink-0"
+            style={{
+              fontSize: 11,
+              color: C.textMuted,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "0 2px",
+              opacity: 0,
+              flexShrink: 0,
+            }}
+            className="group-hover:opacity-100"
             title="Delete"
           >
             ✕
@@ -131,48 +178,53 @@ export function ToolCard({ tool, isDragging, onDeleted }: ToolCardProps) {
         </div>
 
         {dueDateStr && (
-          <div className={`text-xs mt-1 ${isOverdue ? "text-red-500 font-medium" : "text-gray-400"}`}>
+          <div style={{ fontSize: 11, marginTop: 4, color: isOverdue ? "#ef4444" : C.textMuted, fontWeight: isOverdue ? 600 : 400 }}>
             {isOverdue ? "⚠ " : ""}Due: {dueDateStr}
           </div>
         )}
 
         {/* Progress */}
-        <div className="mt-2">
-          <div className="flex justify-between text-xs text-gray-400 mb-1">
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.textMuted, marginBottom: 4 }}>
             <span>{parts.length} parts</span>
-            <span>{progress}%</span>
+            <span style={{ color: progress === 100 ? "#22c55e" : C.textDim }}>{progress}%</span>
           </div>
-          <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+          <div style={{ height: 3, backgroundColor: "#1c2024", borderRadius: 2, overflow: "hidden" }}>
             <div
-              className="h-full bg-blue-400 rounded-full transition-all"
-              style={{ width: `${progress}%` }}
+              style={{
+                height: "100%",
+                width: `${progress}%`,
+                backgroundColor: progress === 100 ? "#22c55e" : C.accent,
+                borderRadius: 2,
+                transition: "width 0.3s",
+              }}
             />
           </div>
         </div>
 
         {/* Stage breakdown */}
         {parts.length > 0 && (activeStages.length > 0 || blockedEntry || doneEntry) && (
-          <div className="mt-2 space-y-1">
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 3 }}>
             {activeStages.length > 0 && (
-              <div className="flex items-center flex-wrap gap-x-1 gap-y-0.5 font-mono text-xs text-gray-500">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 4px", fontFamily: "var(--font-jetbrains-mono)", fontSize: 10, color: C.textDim }}>
                 {activeStages.map(({ stage, count }, i) => (
                   <span key={stage} title={stage}>
-                    {i > 0 && <span className="text-gray-300 mr-1">|</span>}
-                    <span className="font-semibold text-gray-700">{shortLabel(stage)}</span>
+                    {i > 0 && <span style={{ color: C.textMuted, marginRight: 2 }}>|</span>}
+                    <span style={{ color: C.text }}>{shortLabel(stage)}</span>
                     {" "}
-                    <span className="text-gray-400">({count})</span>
+                    <span style={{ color: C.textMuted }}>({count})</span>
                   </span>
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-2 font-mono text-xs">
+            <div style={{ display: "flex", gap: 8, fontFamily: "var(--font-jetbrains-mono)", fontSize: 10 }}>
               {blockedEntry && (
-                <span className="text-red-600 font-semibold">
+                <span style={{ color: "#ef4444", fontWeight: 700 }}>
                   BLOCKED ({blockedEntry.count})
                 </span>
               )}
               {doneEntry && (
-                <span className="text-green-600">
+                <span style={{ color: "#22c55e" }}>
                   DONE ({doneEntry.count})
                 </span>
               )}

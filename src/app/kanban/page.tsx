@@ -11,7 +11,7 @@ export default async function HomePage() {
   });
 
   return (
-    <div className="h-screen flex flex-col p-4 bg-gray-50">
+    <div style={{ height: "calc(100vh - 45px)", display: "flex", flexDirection: "column", padding: "16px", backgroundColor: "#0d0f10" }}>
       <KanbanBoardClient initialTools={JSON.parse(JSON.stringify(tools))} />
     </div>
   );

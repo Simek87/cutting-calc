@@ -19,6 +19,15 @@ interface KanbanBoardProps {
   initialTools: Tool[];
 }
 
+const C = {
+  bg: "#0d0f10",
+  surface: "#141618",
+  border: "#2a2d30",
+  accent: "#e8a020",
+  text: "#e2e4e6",
+  textDim: "#8b9196",
+};
+
 export function KanbanBoard({ initialTools }: KanbanBoardProps) {
   const [tools, setTools] = useState<Tool[]>(initialTools);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -77,17 +86,39 @@ export function KanbanBoard({ initialTools }: KanbanBoardProps) {
     : tools;
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4 px-1 gap-3">
-        <h1 className="text-xl font-semibold text-gray-800">Toolroom Dashboard</h1>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <span
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            color: C.accent,
+            fontFamily: "var(--font-jetbrains-mono)",
+            letterSpacing: "0.05em",
+          }}
+        >
+          KANBAN
+        </span>
         <input
           type="search"
           placeholder="Search tools…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border rounded px-3 py-1.5 text-sm w-48 focus:outline-none focus:border-blue-400"
+          style={{
+            padding: "6px 10px",
+            fontSize: 13,
+            backgroundColor: C.surface,
+            color: C.text,
+            border: `1px solid ${C.border}`,
+            borderRadius: 5,
+            outline: "none",
+            width: 200,
+          }}
         />
-        <CreateToolDialog onCreated={handleToolCreated} />
+        <div style={{ marginLeft: "auto" }}>
+          <CreateToolDialog onCreated={handleToolCreated} />
+        </div>
       </div>
 
       <DndContext
@@ -95,7 +126,7 @@ export function KanbanBoard({ initialTools }: KanbanBoardProps) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4 flex-1">
+        <div style={{ display: "flex", gap: 10, overflowX: "auto", flex: 1, paddingBottom: 8 }}>
           {TOOL_STATUSES.map((status) => (
             <KanbanColumn
               key={status}
