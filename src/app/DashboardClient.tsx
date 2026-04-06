@@ -1610,7 +1610,7 @@ function ProjectRow({
       className="cursor-pointer select-none hover:bg-[#1c2024] transition-colors"
       style={{
         display: "grid",
-        gridTemplateColumns: "16px 1fr 82px 118px 118px 108px 74px",
+        gridTemplateColumns: "16px minmax(0, 200px) 82px 118px 118px 108px 74px",
         alignItems: "center",
         columnGap: 10,
         padding: "10px 14px",
@@ -1732,7 +1732,7 @@ function PartTreeRow({
       className="cursor-pointer select-none"
       style={{
         display: "grid",
-        gridTemplateColumns: "8px 160px 1fr 60px 14px",
+        gridTemplateColumns: "8px 160px minmax(0, 220px) 60px 14px",
         alignItems: "center",
         columnGap: 10,
         padding: "6px 14px 6px 44px",
