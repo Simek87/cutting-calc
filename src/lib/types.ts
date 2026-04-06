@@ -317,16 +317,16 @@ export interface OutsourceJob {
 }
 
 export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
-  Draft: "bg-gray-100 text-gray-600",
-  Sent: "bg-blue-100 text-blue-700",
-  Received: "bg-green-100 text-green-700",
-  Cancelled: "bg-red-100 text-red-600",
+  Draft:     "bg-yellow-900/20 text-yellow-400 border border-yellow-600/30",
+  Sent:      "bg-blue-900/20 text-blue-400 border border-blue-600/30",
+  Received:  "bg-green-900/20 text-green-400 border border-green-600/30",
+  Cancelled: "bg-[#1a1c1f] text-[#4e5560] border border-[#2a2d30]",
 };
 
 export const OUTSOURCE_STATUS_COLORS: Record<OutsourceStatus, string> = {
-  Pending: "bg-gray-100 text-gray-600",
-  Sent: "bg-blue-100 text-blue-700",
-  InProgress: "bg-yellow-100 text-yellow-700",
-  Done: "bg-green-100 text-green-700",
-  Cancelled: "bg-red-100 text-red-600",
+  Pending:    "bg-[#1a1c1f] text-[#8b9196] border border-[#2a2d30]",
+  Sent:       "bg-blue-900/20 text-blue-400 border border-blue-600/30",
+  InProgress: "bg-amber-900/20 text-amber-400 border border-amber-600/30",
+  Done:       "bg-green-900/20 text-green-400 border border-green-600/30",
+  Cancelled:  "bg-[#1a1c1f] text-[#4e5560] border border-[#2a2d30]",
 };

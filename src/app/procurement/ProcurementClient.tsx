@@ -16,10 +16,10 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 const STATUS_PILL: Record<OrderStatus, string> = {
-  Draft:     "bg-yellow-100 text-yellow-800 border border-yellow-300",
-  Sent:      "bg-blue-100 text-blue-700 border border-blue-200",
-  Received:  "bg-green-100 text-green-700 border border-green-200",
-  Cancelled: "bg-gray-100 text-gray-500 border border-gray-200",
+  Draft:     "bg-yellow-900/20 text-yellow-400 border border-yellow-600/30",
+  Sent:      "bg-blue-900/20 text-blue-400 border border-blue-600/30",
+  Received:  "bg-green-900/20 text-green-400 border border-green-600/30",
+  Cancelled: "bg-[#1a1c1f] text-[#4e5560] border border-[#2a2d30]",
 };
 
 interface OperationContext {
@@ -55,14 +55,17 @@ function EtaBadge({ eta, status }: { eta: string | null; status: string }) {
   if (status === "Received" || status === "Cancelled") return null;
   const label = getEtaLabel(eta);
   if (!label) return null;
-  const map = { overdue: "bg-red-100 text-red-700", today: "bg-orange-100 text-orange-700", this_week: "bg-yellow-100 text-yellow-700" };
+  const map = {
+    overdue:   "bg-red-900/20 text-red-400",
+    today:     "bg-orange-900/20 text-orange-400",
+    this_week: "bg-yellow-900/20 text-yellow-400",
+  };
   const text = { overdue: "Overdue", today: "Due Today", this_week: "This Week" };
   return <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${map[label]}`}>{text[label]}</span>;
 }
 
 type ContextLine = { toolId: string; toolName: string; section: string | null; part: string };
 
-// Context priority: OrderItems → direct part link → operations (backward compat)
 function getContextLines(order: OrderWithContext): ContextLine[] {
   if (order.items && order.items.length > 0) {
     const seen = new Set<string>();
@@ -95,6 +98,9 @@ function getContextLines(order: OrderWithContext): ContextLine[] {
   }));
 }
 
+const inputCls = "bg-[#0d0f10] border border-[#2a2d30] text-[#e2e4e6] placeholder-[#4e5560] rounded px-2 py-1.5 text-sm outline-none focus:border-[#4e5560] w-full";
+const labelCls = "block text-xs text-[#4e5560] mb-1";
+
 export function ProcurementClient({ orders: initial, suppliers }: { orders: OrderWithContext[]; suppliers: Supplier[] }) {
   const [orders, setOrders] = useState<OrderWithContext[]>(initial);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -104,13 +110,11 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
   const [editForm, setEditForm] = useState({ poNumber: "", supplierQuoteRef: "", eta: "", notes: "" });
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
-  // Part picker state (used in New Order form)
   const [formTools, setFormTools] = useState<ToolOption[]>([]);
   const [formToolId, setFormToolId] = useState("");
   const [formParts, setFormParts] = useState<PartOption[]>([]);
   const [selectedParts, setSelectedParts] = useState<{ partId: string; qty: number }[]>([]);
 
-  // Load tools when New Order form opens
   useEffect(() => {
     if (!adding) return;
     fetch("/api/tools")
@@ -120,7 +124,6 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
       );
   }, [adding]);
 
-  // Load parts when tool is selected
   useEffect(() => {
     if (!formToolId) { setFormParts([]); setSelectedParts([]); return; }
     fetch(`/api/tools/${formToolId}/parts`)
@@ -252,14 +255,14 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">
       <div className="mb-6">
-        <Link href="/" className="text-sm text-blue-500 hover:underline">← Dashboard</Link>
+        <Link href="/" className="text-sm text-blue-400 hover:underline">← Dashboard</Link>
       </div>
 
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Procurement</h1>
+        <h1 className="text-xl font-semibold text-[#e2e4e6]">Procurement</h1>
         <button
           onClick={() => setAdding((v) => !v)}
-          className="text-sm bg-gray-900 text-white px-3 py-1.5 rounded hover:bg-gray-700"
+          className="text-sm bg-[#1a1c1f] border border-[#2a2d30] text-[#e2e4e6] px-3 py-1.5 rounded hover:bg-[#22262b]"
         >
           + New Order
         </button>
@@ -278,75 +281,70 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
 
       {/* New Order form */}
       {adding && (
-        <form onSubmit={handleAdd} className="bg-white border rounded-lg p-4 mb-6 space-y-4">
-          {/* Supplier + metadata */}
+        <form onSubmit={handleAdd} className="bg-[#141618] border border-[#2a2d30] rounded-lg p-4 mb-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Supplier *</label>
+              <label className={labelCls}>Supplier *</label>
               {suppliers.length > 0 ? (
                 <div className="space-y-1">
                   <select
                     value={form.supplierId}
                     onChange={(e) => setForm((f) => ({ ...f, supplierId: e.target.value, supplier: "" }))}
-                    className="w-full border rounded px-2 py-1.5 text-sm"
+                    className={inputCls}
                   >
                     <option value="">— type manually —</option>
                     {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   {!form.supplierId && (
                     <input required value={form.supplier} onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
-                      className="w-full border rounded px-2 py-1.5 text-sm" placeholder="Supplier name" />
+                      className={inputCls} placeholder="Supplier name" />
                   )}
                 </div>
               ) : (
                 <input required value={form.supplier} onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
-                  className="w-full border rounded px-2 py-1.5 text-sm" placeholder="e.g. Hasco" />
+                  className={inputCls} placeholder="e.g. Hasco" />
               )}
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">ETA</label>
+              <label className={labelCls}>ETA</label>
               <input type="date" value={form.eta} onChange={(e) => setForm((f) => ({ ...f, eta: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm" />
+                className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">PO Number</label>
+              <label className={labelCls}>PO Number</label>
               <input value={form.poNumber} onChange={(e) => setForm((f) => ({ ...f, poNumber: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm" placeholder="PO-2026-001" />
+                className={inputCls} placeholder="PO-2026-001" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Quote Ref</label>
+              <label className={labelCls}>Quote Ref</label>
               <input value={form.supplierQuoteRef} onChange={(e) => setForm((f) => ({ ...f, supplierQuoteRef: e.target.value }))}
-                className="w-full border rounded px-2 py-1.5 text-sm" placeholder="QR-123" />
+                className={inputCls} placeholder="QR-123" />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notes</label>
+            <label className={labelCls}>Notes</label>
             <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              className="w-full border rounded px-2 py-1.5 text-sm resize-none" rows={2} />
+              className={inputCls + " resize-none"} rows={2} />
           </div>
 
           {/* Part picker */}
           <div>
-            <div className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Parts (optional)</div>
+            <div className="text-xs font-semibold text-[#4e5560] mb-2 uppercase tracking-wide">Parts (optional)</div>
             <div className="mb-2">
-              <select
-                value={formToolId}
-                onChange={(e) => setFormToolId(e.target.value)}
-                className="border rounded px-2 py-1.5 text-sm w-full"
-              >
+              <select value={formToolId} onChange={(e) => setFormToolId(e.target.value)} className={inputCls}>
                 <option value="">— select tool —</option>
                 {formTools.map((t) => <option key={t.id} value={t.id}>{t.projectName}</option>)}
               </select>
             </div>
             {formParts.length > 0 && (
-              <div className="border rounded divide-y text-sm max-h-48 overflow-y-auto">
+              <div className="border border-[#2a2d30] rounded divide-y divide-[#2a2d30] text-sm max-h-48 overflow-y-auto">
                 {formParts.map((p) => {
                   const sel = selectedParts.find((s) => s.partId === p.id);
                   return (
-                    <label key={p.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 ${sel ? "bg-blue-50" : ""}`}>
+                    <label key={p.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-[#1a1c1f] ${sel ? "bg-blue-900/20" : ""}`}>
                       <input type="checkbox" checked={!!sel} onChange={() => togglePartSelect(p.id)} className="shrink-0" />
-                      <span className="flex-1 min-w-0">
-                        {p.section && <span className="text-gray-400 mr-1">{p.section.name} →</span>}
+                      <span className="flex-1 min-w-0 text-[#e2e4e6]">
+                        {p.section && <span className="text-[#4e5560] mr-1">{p.section.name} →</span>}
                         <span>{p.name}</span>
                       </span>
                       {sel && (
@@ -354,7 +352,7 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
                           type="number" min={1} value={sel.qty}
                           onChange={(e) => setPartQty(p.id, parseInt(e.target.value) || 1)}
                           onClick={(e) => e.preventDefault()}
-                          className="w-14 border rounded px-1.5 py-0.5 text-xs text-center"
+                          className="w-14 bg-[#0d0f10] border border-[#2a2d30] text-[#e2e4e6] rounded px-1.5 py-0.5 text-xs text-center"
                         />
                       )}
                     </label>
@@ -363,20 +361,20 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
               </div>
             )}
             {selectedParts.length > 0 && (
-              <div className="text-xs text-blue-600 mt-1">{selectedParts.length} part{selectedParts.length > 1 ? "s" : ""} selected</div>
+              <div className="text-xs text-blue-400 mt-1">{selectedParts.length} part{selectedParts.length > 1 ? "s" : ""} selected</div>
             )}
           </div>
 
           <div className="flex gap-2">
-            <button type="submit" className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700">Add Order</button>
+            <button type="submit" className="text-sm bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-600">Add Order</button>
             <button type="button" onClick={() => { setAdding(false); setFormToolId(""); setSelectedParts([]); }}
-              className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+              className="text-sm text-[#4e5560] hover:text-[#8b9196]">Cancel</button>
           </div>
         </form>
       )}
 
       {filtered.length === 0 && (
-        <p className="text-sm text-gray-400 text-center py-12 border border-dashed rounded-lg">
+        <p className="text-sm text-[#4e5560] text-center py-12 border border-dashed border-[#2a2d30] rounded-lg">
           {orders.length === 0 ? "No orders yet." : "No results match filters."}
         </p>
       )}
@@ -385,17 +383,17 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
         const linkedSupplier = suppliers.find((s) => items.some((o) => o.supplierId === s.id));
         return (
           <div key={supplier} className="mb-6">
-            <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-[#4e5560] mb-2 flex items-center gap-2">
               <span>{supplier} <span className="font-normal">({items.length})</span></span>
               {linkedSupplier && (
                 <a href={`mailto:${linkedSupplier.email}`}
-                  className="text-blue-400 hover:text-blue-600 normal-case font-normal tracking-normal"
+                  className="text-blue-400 hover:text-blue-300 normal-case font-normal tracking-normal"
                   title={linkedSupplier.email}>
                   ✉ {linkedSupplier.email}
                 </a>
               )}
             </div>
-            <div className="border rounded-lg divide-y bg-white">
+            <div className="border border-[#2a2d30] rounded-lg divide-y divide-[#2a2d30] bg-[#141618]">
               {items.map((order) => {
                 const contexts = getContextLines(order);
                 const hasItems = (order.items?.length ?? 0) > 0;
@@ -408,9 +406,9 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
                   : 0;
                 const isExpanded = expandedOrders.has(order.id);
                 const rowHighlight = isOverdue
-                  ? "border-l-2 border-l-red-400"
+                  ? "border-l-2 border-l-red-500"
                   : order.status === "Draft"
-                  ? "border-l-2 border-l-yellow-400"
+                  ? "border-l-2 border-l-yellow-500"
                   : "";
 
                 return (
@@ -422,11 +420,11 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
                         <div className="flex items-center gap-2 min-w-0">
                           {toolName ? (
                             <>
-                              <span className="font-bold text-gray-900">{toolName}</span>
+                              <span className="font-bold text-[#e2e4e6]">{toolName}</span>
                               {itemCount > 0 && (
                                 <button
                                   onClick={() => toggleExpand(order.id)}
-                                  className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-0.5"
+                                  className="text-xs text-[#4e5560] hover:text-[#8b9196] flex items-center gap-0.5"
                                 >
                                   <span>{itemCount} {itemCount === 1 ? "item" : "items"}</span>
                                   <span>{isExpanded ? " ▲" : " ▼"}</span>
@@ -434,7 +432,7 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
                               )}
                             </>
                           ) : (
-                            <span className="text-sm text-gray-500 italic">
+                            <span className="text-sm text-[#4e5560] italic">
                               {order.notes || order.poNumber || order.supplier}
                             </span>
                           )}
@@ -446,14 +444,14 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
 
                       {/* Expanded items list */}
                       {isExpanded && hasItems && (
-                        <div className="pl-3 border-l-2 border-gray-100 space-y-0.5">
+                        <div className="pl-3 border-l-2 border-[#2a2d30] space-y-0.5">
                           {order.items!.map((item) => (
-                            <div key={item.id} className="text-xs text-gray-600">
+                            <div key={item.id} className="text-xs text-[#8b9196]">
                               {item.part.section?.name && (
-                                <span className="text-gray-400">{item.part.section.name} → </span>
+                                <span className="text-[#4e5560]">{item.part.section.name} → </span>
                               )}
                               <span>{item.part.name}</span>
-                              <span className="text-gray-400"> ×{item.qty}</span>
+                              <span className="text-[#4e5560]"> ×{item.qty}</span>
                             </div>
                           ))}
                         </div>
@@ -463,12 +461,12 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
                       {(blockingCount > 0 || toolId) && (
                         <div className="flex items-center gap-3 flex-wrap">
                           {blockingCount > 0 && (
-                            <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                            <span className="text-xs font-semibold text-red-400 bg-red-900/20 border border-red-600/30 px-2 py-0.5 rounded-full">
                               ⚠ {blockingCount === 1 ? `Blocking: ${contexts[0].part}` : `Blocking ${blockingCount} parts`}
                             </span>
                           )}
                           {toolId && (
-                            <Link href={`/tools/${toolId}`} className="text-xs text-blue-500 hover:text-blue-700 font-medium">
+                            <Link href={`/tools/${toolId}`} className="text-xs text-blue-400 hover:text-blue-300 font-medium">
                               Open Tool →
                             </Link>
                           )}
@@ -477,70 +475,70 @@ export function ProcurementClient({ orders: initial, suppliers }: { orders: Orde
 
                       {/* SECONDARY: metadata + actions */}
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0 text-xs text-gray-400">
+                        <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0 text-xs text-[#4e5560]">
                           {order.eta && <span>ETA {new Date(order.eta).toLocaleDateString("pl-PL")}</span>}
                           <EtaBadge eta={order.eta} status={order.status} />
-                          {order.poNumber && <><span className="text-gray-300">·</span><span>PO {order.poNumber}</span></>}
-                          {order.supplierQuoteRef && <><span className="text-gray-300">·</span><span>QR {order.supplierQuoteRef}</span></>}
-                          {order.notes && <><span className="text-gray-300">·</span><span className="truncate max-w-xs">{order.notes}</span></>}
+                          {order.poNumber && <><span className="text-[#2a2d30]">·</span><span>PO {order.poNumber}</span></>}
+                          {order.supplierQuoteRef && <><span className="text-[#2a2d30]">·</span><span>QR {order.supplierQuoteRef}</span></>}
+                          {order.notes && <><span className="text-[#2a2d30]">·</span><span className="truncate max-w-xs">{order.notes}</span></>}
                         </div>
                         <div className={`flex items-center gap-1 shrink-0 transition-opacity ${updatingId === order.id ? "opacity-50 pointer-events-none" : ""}`}>
                           {order.status === "Draft" && (
-                            <button onClick={() => handleStatus(order.id, "Sent")} className="text-xs border border-blue-300 text-blue-600 px-2 py-1 rounded hover:bg-blue-50">
+                            <button onClick={() => handleStatus(order.id, "Sent")} className="text-xs border border-blue-600/40 text-blue-400 px-2 py-1 rounded hover:bg-blue-900/20">
                               Mark Ordered
                             </button>
                           )}
                           {order.status === "Sent" && (
-                            <button onClick={() => handleStatus(order.id, "Received")} className="text-xs border border-green-300 text-green-600 px-2 py-1 rounded hover:bg-green-50">
+                            <button onClick={() => handleStatus(order.id, "Received")} className="text-xs border border-green-600/40 text-green-400 px-2 py-1 rounded hover:bg-green-900/20">
                               Mark Received
                             </button>
                           )}
                           <select
                             value={order.status}
                             onChange={(e) => handleStatus(order.id, e.target.value as OrderStatus)}
-                            className={`text-xs border rounded px-2 py-1 ${ORDER_STATUS_COLORS[order.status]}`}
+                            className={`text-xs border rounded px-2 py-1 bg-[#0d0f10] outline-none ${ORDER_STATUS_COLORS[order.status]}`}
                           >
                             {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
                           </select>
                           <button
                             onClick={() => editingId === order.id ? setEditingId(null) : startEdit(order)}
-                            className={`text-xs px-1.5 py-1 rounded ${editingId === order.id ? "text-blue-500" : "text-gray-300 hover:text-gray-500"}`}
+                            className={`text-xs px-1.5 py-1 rounded ${editingId === order.id ? "text-blue-400" : "text-[#2a2d30] hover:text-[#8b9196]"}`}
                             title="Edit details"
                           >✎</button>
-                          <button onClick={() => handleDelete(order.id)} className="text-gray-300 hover:text-red-400 text-xs">✕</button>
+                          <button onClick={() => handleDelete(order.id)} className="text-[#2a2d30] hover:text-red-400 text-xs">✕</button>
                         </div>
                       </div>
                     </div>
 
                     {/* Edit form */}
                     {editingId === order.id && (
-                      <div className="px-4 pb-3 pt-2 border-t border-gray-100 bg-gray-50">
+                      <div className="px-4 pb-3 pt-2 border-t border-[#2a2d30] bg-[#0d0f10]">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block text-xs text-gray-400 mb-0.5">PO Number</label>
+                            <label className={labelCls}>PO Number</label>
                             <input value={editForm.poNumber} onChange={(e) => setEditForm((f) => ({ ...f, poNumber: e.target.value }))}
-                              placeholder="PO-2026-001" className="w-full border rounded px-2 py-1 text-xs" />
+                              placeholder="PO-2026-001" className={inputCls} />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-400 mb-0.5">Quote Ref</label>
+                            <label className={labelCls}>Quote Ref</label>
                             <input value={editForm.supplierQuoteRef} onChange={(e) => setEditForm((f) => ({ ...f, supplierQuoteRef: e.target.value }))}
-                              placeholder="QR-123" className="w-full border rounded px-2 py-1 text-xs" />
+                              placeholder="QR-123" className={inputCls} />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-400 mb-0.5">ETA</label>
+                            <label className={labelCls}>ETA</label>
                             <input type="date" value={editForm.eta} onChange={(e) => setEditForm((f) => ({ ...f, eta: e.target.value }))}
-                              className="w-full border rounded px-2 py-1 text-xs" />
+                              className={inputCls} />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-400 mb-0.5">Notes</label>
+                            <label className={labelCls}>Notes</label>
                             <input value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-                              placeholder="Notes" className="w-full border rounded px-2 py-1 text-xs" />
+                              placeholder="Notes" className={inputCls} />
                           </div>
                         </div>
                         <div className="flex gap-2 mt-2">
                           <button onClick={() => handleEdit(order.id)} disabled={updatingId === order.id}
-                            className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 disabled:opacity-50">Save</button>
-                          <button onClick={() => setEditingId(null)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                            className="text-xs bg-blue-700 text-white px-2 py-1 rounded hover:bg-blue-600 disabled:opacity-50">Save</button>
+                          <button onClick={() => setEditingId(null)} className="text-xs text-[#4e5560] hover:text-[#8b9196]">Cancel</button>
                         </div>
                       </div>
                     )}

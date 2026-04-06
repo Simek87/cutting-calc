@@ -15,6 +15,9 @@ const EMPTY_FORM = {
   emailBodyTemplate: "",
 };
 
+const inputCls = "bg-[#0d0f10] border border-[#2a2d30] text-[#e2e4e6] placeholder-[#4e5560] rounded px-2 py-1.5 text-sm outline-none focus:border-[#4e5560] w-full";
+const labelCls = "block text-xs text-[#4e5560] mb-1";
+
 export function SuppliersClient({ initialSuppliers }: Props) {
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [showForm, setShowForm] = useState(false);
@@ -78,80 +81,80 @@ export function SuppliersClient({ initialSuppliers }: Props) {
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-gray-800">Suppliers</h1>
+        <h1 className="text-xl font-semibold text-[#e2e4e6]">Suppliers</h1>
         <button
           onClick={openCreate}
-          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+          className="px-3 py-1.5 bg-[#1a1c1f] border border-[#2a2d30] text-[#e2e4e6] text-sm rounded hover:bg-[#22262b]"
         >
           + Add Supplier
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-6 border rounded-lg p-4 bg-gray-50 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700">{editId ? "Edit Supplier" : "New Supplier"}</h2>
+        <form onSubmit={handleSubmit} className="mb-6 border border-[#2a2d30] rounded-lg p-4 bg-[#141618] space-y-3">
+          <h2 className="text-sm font-semibold text-[#e2e4e6]">{editId ? "Edit Supplier" : "New Supplier"}</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Name *</label>
+              <label className={labelCls}>Name *</label>
               <input
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className={inputCls}
                 autoFocus
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Email *</label>
+              <label className={labelCls}>Email *</label>
               <input
                 required
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full border rounded px-2 py-1.5 text-sm"
+                className={inputCls}
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Notes</label>
+            <label className={labelCls}>Notes</label>
             <input
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="Optional notes"
-              className="w-full border rounded px-2 py-1.5 text-sm"
+              className={inputCls}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Default Email Subject Template</label>
+            <label className={labelCls}>Default Email Subject Template</label>
             <input
               value={form.emailSubjectTemplate}
               onChange={(e) => setForm({ ...form, emailSubjectTemplate: e.target.value })}
               placeholder="e.g. Laser parts request – {toolName}"
-              className="w-full border rounded px-2 py-1.5 text-sm font-mono"
+              className={inputCls + " font-mono"}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Default Email Body Template</label>
+            <label className={labelCls}>Default Email Body Template</label>
             <textarea
               value={form.emailBodyTemplate}
               onChange={(e) => setForm({ ...form, emailBodyTemplate: e.target.value })}
-              placeholder="e.g. Hi,&#10;&#10;Please quote the following parts:&#10;{partList}&#10;&#10;Regards"
+              placeholder={"e.g. Hi,\n\nPlease quote the following parts:\n{partList}\n\nRegards"}
               rows={5}
-              className="w-full border rounded px-2 py-1.5 text-sm font-mono"
+              className={inputCls + " font-mono resize-none"}
             />
           </div>
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={loading}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1.5 bg-blue-700 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50"
             >
               {loading ? "..." : editId ? "Save" : "Create"}
             </button>
             <button
               type="button"
               onClick={() => { setShowForm(false); setEditId(null); }}
-              className="px-3 py-1.5 text-sm border rounded hover:bg-gray-100"
+              className="px-3 py-1.5 text-sm border border-[#2a2d30] text-[#8b9196] rounded hover:bg-[#1a1c1f]"
             >
               Cancel
             </button>
@@ -160,29 +163,29 @@ export function SuppliersClient({ initialSuppliers }: Props) {
       )}
 
       {suppliers.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12 border border-dashed rounded-lg">
+        <p className="text-sm text-[#4e5560] text-center py-12 border border-dashed border-[#2a2d30] rounded-lg">
           No suppliers yet. Add one to get started.
         </p>
       ) : (
         <div className="space-y-2">
           {suppliers.map((s) => (
-            <div key={s.id} className="border rounded-lg bg-white p-4">
+            <div key={s.id} className="border border-[#2a2d30] rounded-lg bg-[#141618] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="font-medium text-sm text-gray-800">{s.name}</span>
+                    <span className="font-medium text-sm text-[#e2e4e6]">{s.name}</span>
                     <a
                       href={`mailto:${s.email}`}
-                      className="text-xs text-blue-500 hover:underline"
+                      className="text-xs text-blue-400 hover:underline"
                     >
                       {s.email}
                     </a>
                   </div>
                   {s.notes && (
-                    <p className="text-xs text-gray-500 mt-1">{s.notes}</p>
+                    <p className="text-xs text-[#8b9196] mt-1">{s.notes}</p>
                   )}
                   {s.emailSubjectTemplate && (
-                    <p className="text-xs text-gray-400 mt-1 font-mono truncate">
+                    <p className="text-xs text-[#4e5560] mt-1 font-mono truncate">
                       Subject: {s.emailSubjectTemplate}
                     </p>
                   )}
@@ -190,13 +193,13 @@ export function SuppliersClient({ initialSuppliers }: Props) {
                 <div className="flex gap-2 shrink-0">
                   <button
                     onClick={() => openEdit(s)}
-                    className="text-xs text-gray-400 hover:text-gray-700 border rounded px-2 py-1"
+                    className="text-xs text-[#8b9196] hover:text-[#e2e4e6] border border-[#2a2d30] rounded px-2 py-1 hover:bg-[#1a1c1f]"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(s.id, s.name)}
-                    className="text-xs text-gray-300 hover:text-red-500 border rounded px-2 py-1"
+                    className="text-xs text-[#4e5560] hover:text-red-400 border border-[#2a2d30] rounded px-2 py-1 hover:bg-[#1a1c1f]"
                   >
                     Delete
                   </button>
