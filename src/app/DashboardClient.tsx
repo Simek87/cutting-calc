@@ -1607,23 +1607,27 @@ function ProjectRow({
   return (
     <div
       onClick={onToggle}
-      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none hover:bg-[#1c2024] transition-colors"
+      className="cursor-pointer select-none hover:bg-[#1c2024] transition-colors"
       style={{
+        display: "grid",
+        gridTemplateColumns: "16px 1fr 82px 118px 118px 108px 74px",
+        alignItems: "center",
+        columnGap: 10,
+        padding: "10px 14px",
         borderBottom: `1px solid ${C.border}`,
         backgroundColor: isExpanded ? "rgba(232,160,32,0.05)" : "transparent",
-        minWidth: 0,
+        overflow: "hidden",
       }}
     >
-      {/* Toggle indicator */}
+      {/* Toggle */}
       <span
         style={{
           fontSize: 10,
           color: C.textMuted,
-          width: 12,
-          flexShrink: 0,
-          transition: "transform 0.15s",
           display: "inline-block",
+          transition: "transform 0.15s",
           transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+          justifySelf: "center",
         }}
       >
         ▶
@@ -1631,13 +1635,14 @@ function ProjectRow({
 
       {/* Project name */}
       <span
-        className="font-semibold truncate"
         style={{
           fontSize: 13,
+          fontWeight: 600,
           color: C.accent,
           fontFamily: "var(--font-jetbrains-mono)",
-          flex: "1 1 0",
-          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
       >
         {tool.projectName}
@@ -1645,41 +1650,51 @@ function ProjectRow({
 
       {/* Type badge */}
       <span
-        className="text-xs px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0"
-        style={{ color: C.textMuted, border: `1px solid ${C.border}` }}
+        style={{
+          fontSize: 11,
+          color: C.textMuted,
+          border: `1px solid ${C.border}`,
+          borderRadius: 4,
+          padding: "2px 6px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
       >
         {tool.projectType}
       </span>
 
       {/* Status badge */}
-      <div className="flex-shrink-0">
+      <div style={{ overflow: "hidden" }}>
         <StatusBadge status={tool.status} />
       </div>
 
-      {/* Section chips — only show when collapsed */}
-      {!isExpanded && sectionCodes.length > 0 && (
-        <div className="flex gap-1 flex-shrink-0">
-          {sectionCodes.slice(0, 3).map((c) => (
-            <SectionChip key={c} code={c} />
-          ))}
-          {sectionCodes.length > 3 && (
-            <span className="text-xs" style={{ color: C.textMuted }}>
-              +{sectionCodes.length - 3}
-            </span>
-          )}
-        </div>
-      )}
+      {/* Section chips — always reserve the column */}
+      <div style={{ display: "flex", gap: 3, overflow: "hidden", alignItems: "center" }}>
+        {sectionCodes.slice(0, 3).map((c) => (
+          <SectionChip key={c} code={c} />
+        ))}
+        {sectionCodes.length > 3 && (
+          <span style={{ fontSize: 10, color: C.textMuted }}>
+            +{sectionCodes.length - 3}
+          </span>
+        )}
+      </div>
 
       {/* Progress bar */}
-      <div className="flex-shrink-0">
-        <ProgressBar value={tool.progress} />
-      </div>
+      <ProgressBar value={tool.progress} />
 
       {/* Deadline */}
       {tool.dueDate ? (
         <span
-          className="text-xs tabular-nums flex-shrink-0"
-          style={{ color: C.textDim, fontFamily: "var(--font-jetbrains-mono)" }}
+          style={{
+            fontSize: 11,
+            color: C.textDim,
+            fontFamily: "var(--font-jetbrains-mono)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
         >
           {new Date(tool.dueDate).toLocaleDateString("en-GB", {
             day: "2-digit",
@@ -1688,9 +1703,7 @@ function ProjectRow({
           })}
         </span>
       ) : (
-        <span className="text-xs flex-shrink-0" style={{ color: C.textMuted }}>
-          —
-        </span>
+        <span style={{ fontSize: 11, color: C.textMuted }}>—</span>
       )}
     </div>
   );
@@ -1716,13 +1729,17 @@ function PartTreeRow({
         e.stopPropagation();
         onSelect();
       }}
-      className="flex items-center gap-3 px-3 py-1.5 cursor-pointer select-none"
+      className="cursor-pointer select-none"
       style={{
-        paddingLeft: 36,
+        display: "grid",
+        gridTemplateColumns: "8px 160px 1fr 60px 14px",
+        alignItems: "center",
+        columnGap: 10,
+        padding: "6px 14px 6px 44px",
         borderBottom: `1px solid rgba(42,45,48,0.5)`,
         backgroundColor: isSelected ? C.accentDim : "transparent",
         transition: "background-color 0.1s",
-        minWidth: 0,
+        overflow: "hidden",
       }}
       onMouseEnter={(e) => {
         if (!isSelected)
@@ -1744,8 +1761,6 @@ function PartTreeRow({
           fontSize: 11,
           color: C.accent,
           fontFamily: "var(--font-jetbrains-mono)",
-          flex: "0 0 auto",
-          maxWidth: 150,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1759,8 +1774,6 @@ function PartTreeRow({
         style={{
           fontSize: 11,
           color: C.textDim,
-          flex: 1,
-          minWidth: 0,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1770,14 +1783,15 @@ function PartTreeRow({
       </span>
 
       {/* Progress pips */}
-      <div className="flex-shrink-0">
-        <PartPips ops={part.operations} />
-      </div>
+      <PartPips ops={part.operations} />
 
       {/* Arrow */}
       <span
-        className="flex-shrink-0 text-xs"
-        style={{ color: isSelected ? C.accent : C.textMuted }}
+        style={{
+          fontSize: 11,
+          color: isSelected ? C.accent : C.textMuted,
+          justifySelf: "end",
+        }}
       >
         {isSelected ? "‹" : "›"}
       </span>
