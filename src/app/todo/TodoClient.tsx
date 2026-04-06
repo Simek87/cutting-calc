@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   DndContext,
   closestCenter,
@@ -20,6 +20,16 @@ import { CSS } from "@dnd-kit/utilities";
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type TodoColumn = "MyTasks" | "Hurco" | "Danusys";
+
+interface KanbanPart {
+  id: string;
+  name: string;
+  toolId: string;
+  toolName: string;
+  sectionName: string | null;
+  dueDate: string | null;
+  operations: { id: string; name: string; order: number; type: string; status: string }[];
+}
 
 interface TodoItem {
   id: string;
@@ -279,19 +289,72 @@ function AddItemForm({
   col,
   weekStart,
   onAdd,
+  parts,
 }: {
   col: typeof COLUMNS[number];
   weekStart: string;
   onAdd: (item: TodoItem) => void;
+  parts: KanbanPart[];
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [subtext, setSubtext] = useState("");
+  const [linkedPartId, setLinkedPartId] = useState<string | null>(null);
+  const [linkedOperationId, setLinkedOperationId] = useState<string | null>(null);
+  const [partSearch, setPartSearch] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pickerOpen]);
+
+  const filteredParts = useMemo(() => {
+    const q = partSearch.toLowerCase().trim();
+    const list = q
+      ? parts.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            p.toolName.toLowerCase().includes(q)
+        )
+      : parts;
+    return list.slice(0, 24);
+  }, [parts, partSearch]);
+
+  const getActiveOp = (p: KanbanPart) =>
+    p.operations.find((op) => op.status === "InProgress") ??
+    p.operations.find((op) => !["Done", "Received"].includes(op.status)) ??
+    null;
+
+  const selectPart = (p: KanbanPart) => {
+    const op = getActiveOp(p);
+    setText(p.name);
+    setSubtext(op?.name ?? "");
+    setLinkedPartId(p.id);
+    setLinkedOperationId(op?.id ?? null);
+    setPartSearch(p.name);
+    setPickerOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const clearLinked = () => {
+    setLinkedPartId(null);
+    setLinkedOperationId(null);
+    setPartSearch("");
+  };
 
   const handleSubmit = async () => {
     if (!text.trim()) return;
@@ -304,6 +367,8 @@ function AddItemForm({
         subtext: subtext.trim() || null,
         weekStart,
         order: 999,
+        linkedPartId: linkedPartId ?? undefined,
+        linkedOperationId: linkedOperationId ?? undefined,
       }),
     });
     if (res.ok) {
@@ -311,6 +376,9 @@ function AddItemForm({
       onAdd(item);
       setText("");
       setSubtext("");
+      setLinkedPartId(null);
+      setLinkedOperationId(null);
+      setPartSearch("");
       setOpen(false);
     }
   };
@@ -332,6 +400,95 @@ function AddItemForm({
       className="rounded-lg p-3 space-y-2"
       style={{ border: `1px solid ${col.border}`, backgroundColor: C.surface2 }}
     >
+      {/* Part picker */}
+      <div ref={pickerRef} style={{ position: "relative" }}>
+        <div style={{ position: "relative" }}>
+          <input
+            value={partSearch}
+            onChange={(e) => {
+              setPartSearch(e.target.value);
+              setPickerOpen(true);
+              // clear link if user is re-typing
+              if (linkedPartId) clearLinked();
+            }}
+            onFocus={() => setPickerOpen(true)}
+            placeholder="Search part… (optional)"
+            className="w-full text-xs rounded px-2 py-1 outline-none"
+            style={{
+              backgroundColor: C.bg,
+              color: linkedPartId ? C.accent : C.textDim,
+              border: `1px solid ${linkedPartId ? C.accentBorder : C.border}`,
+              paddingRight: linkedPartId ? 22 : undefined,
+            }}
+          />
+          {linkedPartId && (
+            <button
+              onClick={clearLinked}
+              style={{
+                position: "absolute",
+                right: 6,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: C.textMuted,
+                fontSize: 11,
+                lineHeight: 1,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+              }}
+              tabIndex={-1}
+              title="Clear"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {pickerOpen && filteredParts.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 2px)",
+              left: 0,
+              right: 0,
+              zIndex: 50,
+              backgroundColor: C.surface,
+              border: `1px solid ${C.border}`,
+              borderRadius: 6,
+              maxHeight: 200,
+              overflowY: "auto",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.5)",
+            }}
+          >
+            {filteredParts.map((p) => {
+              const op = getActiveOp(p);
+              return (
+                <div
+                  key={p.id}
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // keep focus
+                    selectPart(p);
+                  }}
+                  style={{
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    borderBottom: `1px solid ${C.border}`,
+                  }}
+                  className="hover:bg-[#1a1d20]"
+                >
+                  <div style={{ fontSize: 12, color: C.text, lineHeight: 1.3 }}>{p.name}</div>
+                  <div style={{ fontSize: 10, color: C.textMuted, lineHeight: 1.4 }}>
+                    {p.toolName}
+                    {op ? <span style={{ color: C.textDim }}> · {op.name}</span> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Task text */}
       <input
         ref={inputRef}
         value={text}
@@ -344,6 +501,8 @@ function AddItemForm({
         className="w-full text-sm rounded px-2 py-1.5 outline-none"
         style={{ backgroundColor: C.bg, color: C.text, border: `1px solid ${C.border}` }}
       />
+
+      {/* Subtext / category */}
       {col.key === "MyTasks" ? (
         <select
           value={subtext}
@@ -366,6 +525,7 @@ function AddItemForm({
           style={{ backgroundColor: C.bg, color: C.textDim, border: `1px solid ${C.border}` }}
         />
       )}
+
       <div className="flex gap-2 justify-end">
         <button
           onClick={() => setOpen(false)}
@@ -377,7 +537,11 @@ function AddItemForm({
         <button
           onClick={handleSubmit}
           className="text-xs px-3 py-1 rounded font-medium"
-          style={{ backgroundColor: col.color === C.textDim ? C.surface2 : col.color, color: col.color === C.textDim ? C.text : "#000", border: `1px solid ${col.border}` }}
+          style={{
+            backgroundColor: col.color === C.textDim ? C.surface2 : col.color,
+            color: col.color === C.textDim ? C.text : "#000",
+            border: `1px solid ${col.border}`,
+          }}
         >
           Add
         </button>
@@ -475,6 +639,7 @@ function TodoColumn({
   onDelete,
   onEdit,
   onReorder,
+  parts,
 }: {
   col: typeof COLUMNS[number];
   items: TodoItem[];
@@ -484,6 +649,7 @@ function TodoColumn({
   onDelete: (id: string) => void;
   onEdit: (id: string, text: string, subtext: string) => void;
   onReorder: (col: TodoColumn, newOrder: TodoItem[]) => void;
+  parts: KanbanPart[];
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -584,7 +750,7 @@ function TodoColumn({
 
       {/* Add form */}
       <div className="p-2 flex-shrink-0" style={{ borderTop: `1px solid ${C.border}` }}>
-        <AddItemForm col={col} weekStart={weekStart} onAdd={onAdd} />
+        <AddItemForm col={col} weekStart={weekStart} onAdd={onAdd} parts={parts} />
       </div>
     </div>
   );
@@ -596,7 +762,16 @@ export function TodoClient() {
   const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()));
   const [items, setItems] = useState<TodoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [parts, setParts] = useState<KanbanPart[]>([]);
   const carriedOver = useRef(false);
+
+  // Fetch parts once on mount for the picker
+  useEffect(() => {
+    fetch("/api/kanban-parts")
+      .then((r) => r.json())
+      .then((data: KanbanPart[]) => setParts(data))
+      .catch(() => {});
+  }, []);
 
   const weekStartISO = toISO(weekStart);
 
@@ -737,6 +912,7 @@ export function TodoClient() {
             onDelete={handleDelete}
             onEdit={handleEdit}
             onReorder={handleReorder}
+            parts={parts}
           />
         ))}
       </div>
