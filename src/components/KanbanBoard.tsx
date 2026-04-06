@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -172,18 +172,68 @@ function getEntryStatus(op: PartOp): string {
   return "InProgress";
 }
 
+// ── Toast ─────────────────────────────────────────────────────────────────
+
+function KanbanToast({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 3000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 24,
+        right: 24,
+        zIndex: 9999,
+        padding: "8px 14px",
+        borderRadius: 6,
+        backgroundColor: "#22c55e",
+        color: "#000",
+        fontSize: 12,
+        fontWeight: 600,
+        fontFamily: "var(--font-jetbrains-mono)",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+        pointerEvents: "none",
+      }}
+    >
+      {message}
+    </div>
+  );
+}
+
+// ── Week Monday helper ─────────────────────────────────────────────────────
+
+function getWeekStart(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // Monday
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
 // ── Part Card ─────────────────────────────────────────────────────────────
 
 function PartCard({
   part,
   isDragging,
+  onToast,
 }: {
   part: KanbanPart;
   isDragging?: boolean;
+  onToast: (msg: string) => void;
 }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, active } =
     useSortable({ id: part.id });
+  const [addingTodo, setAddingTodo] = useState(false);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -202,6 +252,29 @@ function PartCard({
 
   const pips = part.operations.slice(0, 8);
 
+  const handleAddTodo = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeOp || addingTodo) return;
+    setAddingTodo(true);
+    try {
+      await fetch("/api/todo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          column: "MyTasks",
+          text: part.name,
+          subtext: activeOp.name,
+          weekStart: getWeekStart(),
+          linkedPartId: part.id,
+          linkedOperationId: activeOp.id,
+        }),
+      });
+      onToast(`Added "${part.name}" to My Tasks`);
+    } finally {
+      setAddingTodo(false);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -216,6 +289,35 @@ function PartCard({
       }}
       className="group"
     >
+      {/* + TO-DO button — top-right, visible on hover */}
+      {activeOp && !isDragging && (
+        <button
+          onClick={handleAddTodo}
+          disabled={addingTodo}
+          title="Add to My Tasks"
+          className="opacity-0 group-hover:opacity-100"
+          style={{
+            position: "absolute",
+            top: 5,
+            right: 6,
+            fontSize: 9,
+            padding: "2px 5px",
+            borderRadius: 3,
+            border: `1px solid ${C.border}`,
+            backgroundColor: C.bg,
+            color: addingTodo ? C.textMuted : C.accent,
+            cursor: addingTodo ? "not-allowed" : "pointer",
+            fontFamily: "var(--font-jetbrains-mono)",
+            fontWeight: 600,
+            lineHeight: 1.4,
+            transition: "opacity 0.15s",
+            zIndex: 1,
+          }}
+        >
+          {addingTodo ? "…" : "+ TODO"}
+        </button>
+      )}
+
       {/* Drag handle */}
       <div
         {...attributes}
@@ -237,7 +339,7 @@ function PartCard({
         style={{ padding: "2px 10px 8px", cursor: "pointer" }}
         onClick={() => router.push(`/tools/${part.toolId}/parts/${part.id}`)}
       >
-        {/* Part name */}
+        {/* Part name — paddingRight to avoid overlap with + TODO button */}
         <div
           style={{
             fontSize: 12,
@@ -248,6 +350,7 @@ function PartCard({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
+            paddingRight: activeOp ? 44 : 0,
           }}
         >
           {part.name}
@@ -405,11 +508,13 @@ function KanbanCol({
   parts,
   collapsed,
   onToggleCollapse,
+  onToast,
 }: {
   col: (typeof KANBAN_COLS)[number];
   parts: KanbanPart[];
   collapsed: boolean;
   onToggleCollapse: () => void;
+  onToast: (msg: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
 
@@ -519,7 +624,7 @@ function KanbanCol({
           strategy={verticalListSortingStrategy}
         >
           {parts.map((p) => (
-            <PartCard key={p.id} part={p} />
+            <PartCard key={p.id} part={p} onToast={onToast} />
           ))}
         </SortableContext>
       </div>
@@ -535,6 +640,7 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
   const [projectFilter, setProjectFilter] = useState<string>("ALL");
   const [sectionFilter, setSectionFilter] = useState<SectionCode | "ALL">("ALL");
   const [collapsedCols, setCollapsedCols] = useState<Set<KanbanColId>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
 
   const toggleColCollapse = useCallback((colId: KanbanColId) => {
     setCollapsedCols((prev) => {
@@ -779,14 +885,17 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
               parts={colParts[col.id]}
               collapsed={collapsedCols.has(col.id)}
               onToggleCollapse={() => toggleColCollapse(col.id)}
+              onToast={setToast}
             />
           ))}
         </div>
 
         <DragOverlay>
-          {activePart ? <PartCard part={activePart} isDragging /> : null}
+          {activePart ? <PartCard part={activePart} isDragging onToast={setToast} /> : null}
         </DragOverlay>
       </DndContext>
+
+      {toast && <KanbanToast message={toast} onDismiss={() => setToast(null)} />}
     </div>
   );
 }
