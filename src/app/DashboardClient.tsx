@@ -1597,26 +1597,38 @@ function ProjectRow({
   tool,
   isExpanded,
   onToggle,
+  onArchive,
+  onDelete,
 }: {
   tool: DashboardTool;
   isExpanded: boolean;
   onToggle: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
 }) {
   const sectionCodes = [...new Set(tool.sections.map(toSectionCode))];
+  const [hovered, setHovered] = useState(false);
 
   return (
     <div
       onClick={onToggle}
-      className="cursor-pointer select-none hover:bg-[#1c2024] transition-colors"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="cursor-pointer select-none"
       style={{
         display: "grid",
-        gridTemplateColumns: "16px minmax(0, 200px) 82px 118px 118px 108px 74px",
+        gridTemplateColumns: "16px minmax(0, 200px) 82px 118px 118px 108px 74px 60px",
         alignItems: "center",
         columnGap: 10,
         padding: "10px 14px",
         borderBottom: `1px solid ${C.border}`,
-        backgroundColor: isExpanded ? "rgba(232,160,32,0.05)" : "transparent",
+        backgroundColor: isExpanded
+          ? "rgba(232,160,32,0.05)"
+          : hovered
+          ? C.surfaceHover
+          : "transparent",
         overflow: "hidden",
+        transition: "background-color 0.1s",
       }}
     >
       {/* Toggle */}
@@ -1705,6 +1717,51 @@ function ProjectRow({
       ) : (
         <span style={{ fontSize: 11, color: C.textMuted }}>—</span>
       )}
+
+      {/* Action buttons — visible on hover */}
+      <div
+        style={{
+          display: "flex",
+          gap: 4,
+          justifyContent: "flex-end",
+          opacity: hovered ? 1 : 0,
+          transition: "opacity 0.15s",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onArchive}
+          title="Archive"
+          style={{
+            fontSize: 11,
+            padding: "2px 6px",
+            color: C.textMuted,
+            border: `1px solid ${C.border}`,
+            borderRadius: 4,
+            background: "none",
+            cursor: "pointer",
+            lineHeight: 1,
+          }}
+        >
+          📦
+        </button>
+        <button
+          onClick={onDelete}
+          title="Delete"
+          style={{
+            fontSize: 11,
+            padding: "2px 6px",
+            color: C.textMuted,
+            border: `1px solid ${C.border}`,
+            borderRadius: 4,
+            background: "none",
+            cursor: "pointer",
+            lineHeight: 1,
+          }}
+        >
+          🗑
+        </button>
+      </div>
     </div>
   );
 }
@@ -1805,7 +1862,7 @@ const FILTERS = ["ALL", ...SECTION_CODES] as const;
 type Filter = (typeof FILTERS)[number];
 
 export function DashboardClient({
-  tools,
+  tools: initialTools,
   stats,
   activityLogs,
   suppliers = [],
@@ -1816,6 +1873,7 @@ export function DashboardClient({
   suppliers?: Supplier[];
 }) {
   const router = useRouter();
+  const [toolsList, setToolsList] = useState<DashboardTool[]>(initialTools);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -1825,15 +1883,43 @@ export function DashboardClient({
   const [showMatOrder, setShowMatOrder] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Archive / Delete handlers
+  const handleArchive = useCallback(async (id: string) => {
+    setToolsList((prev) => prev.filter((t) => t.id !== id));
+    if (selectedPartId) {
+      const isInTool = initialTools
+        .find((t) => t.id === id)
+        ?.parts.some((p) => p.id === selectedPartId);
+      if (isInTool) setSelectedPartId(null);
+    }
+    await fetch(`/api/tools/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: true }),
+    });
+  }, [selectedPartId, initialTools]);
+
+  const handleDelete = useCallback(async (id: string, projectName: string) => {
+    if (!confirm(`Delete "${projectName}"? This cannot be undone.`)) return;
+    setToolsList((prev) => prev.filter((t) => t.id !== id));
+    if (selectedPartId) {
+      const isInTool = initialTools
+        .find((t) => t.id === id)
+        ?.parts.some((p) => p.id === selectedPartId);
+      if (isInTool) setSelectedPartId(null);
+    }
+    await fetch(`/api/tools/${id}`, { method: "DELETE" });
+  }, [selectedPartId, initialTools]);
+
   // Derive selected part context
   const selectedPartContext = useMemo(() => {
     if (!selectedPartId) return null;
-    for (const tool of tools) {
+    for (const tool of toolsList) {
       const part = tool.parts.find((p) => p.id === selectedPartId);
       if (part) return { tool, part };
     }
     return null;
-  }, [selectedPartId, tools]);
+  }, [selectedPartId, toolsList]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1873,7 +1959,7 @@ export function DashboardClient({
 
   // Filter & search
   const filtered = useMemo(() => {
-    return tools.filter((tool) => {
+    return toolsList.filter((tool) => {
       if (filter !== "ALL") {
         const codes = tool.sections.map(toSectionCode);
         if (!codes.includes(filter)) return false;
@@ -1884,7 +1970,7 @@ export function DashboardClient({
       }
       return true;
     });
-  }, [tools, filter, search]);
+  }, [toolsList, filter, search]);
 
   // When filter is active, auto-expand all matching projects
   const effectiveExpandedIds = useMemo(() => {
@@ -2061,6 +2147,8 @@ export function DashboardClient({
                     tool={tool}
                     isExpanded={isExpanded}
                     onToggle={() => toggleExpand(tool.id)}
+                    onArchive={() => handleArchive(tool.id)}
+                    onDelete={() => handleDelete(tool.id, tool.projectName)}
                   />
 
                   {isExpanded && (

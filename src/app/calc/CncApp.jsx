@@ -305,7 +305,7 @@ const css = `
   .tab-btn {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
     padding: 9px 16px; border-radius: 6px; border: none; cursor: pointer;
-    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.06em;
     transition: all 0.18s; color: var(--muted); background: transparent;
     text-transform: uppercase;
   }
@@ -315,8 +315,8 @@ const css = `
 
   /* SECTION TITLE */
   .sec-title {
-    font-family: var(--mono); font-size: 10px; color: var(--cyan);
-    letter-spacing: 0.2em; text-transform: uppercase;
+    font-family: var(--mono); font-size: 15px; color: var(--cyan);
+    letter-spacing: 0.12em; text-transform: uppercase;
     margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
   }
   .sec-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
@@ -346,11 +346,11 @@ const css = `
   /* INPUTS */
   .inp {
     background: var(--s3); border: 1px solid var(--border2); border-radius: 6px;
-    padding: 7px 10px; font-family: var(--mono); font-size: 11px;
+    padding: 7px 10px; font-family: var(--mono); font-size: 13px;
     color: var(--text); width: 100%; transition: border-color 0.15s;
   }
   .inp:focus { outline: none; border-color: var(--cyan); }
-  .inp-label { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 5px; display: block; }
+  .inp-label { font-family: var(--mono); font-size: 13px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 5px; display: block; }
   .inp-group { display: flex; flex-direction: column; gap: 4px; }
 
   /* SELECT */
@@ -458,7 +458,7 @@ const css = `
     background: var(--s2); border: 1px solid var(--border); border-radius: 8px;
     padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
   }
-  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 700; line-height: 1; }
+  .stat-val { font-family: var(--mono); font-size: 26px; font-weight: 700; line-height: 1; }
   .stat-unit { font-family: var(--mono); font-size: 10px; color: var(--muted); }
   .stat-label { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; }
 
@@ -490,8 +490,8 @@ const css = `
   .tab-btn { min-width: 120px; }
 
   /* Tighter table cells for data density */
-  .tbl th { padding: 7px 10px; font-size: 9px; }
-  .tbl td { padding: 7px 10px; font-size: 11px; }
+  .tbl th { padding: 7px 10px; font-size: 11px; }
+  .tbl td { padding: 7px 10px; font-size: 13px; }
 
   /* cfg grid always 7 cols on PC */
   .cfg-grid { grid-template-columns: 2fr repeat(6,1fr) auto; }
@@ -519,6 +519,139 @@ function MachineSelector({ activeMachine, onSelect }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── LIVE CALC ─────────────────────────────────────────────────────────────────
+const LIVE_CALC_DEFAULT = { D: 20, z: 3, vc: 350, fz: 0.22, ae: 2, ap: 30 };
+const LIVE_CALC_KEY = "mrr-custom-settings";
+
+function LiveCalc({ activeMachine }) {
+  const maxRPM = MACHINES[activeMachine]?.maxRPM || 14000;
+
+  const [vals, setVals] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LIVE_CALC_KEY) || "null");
+      return saved || { ...LIVE_CALC_DEFAULT };
+    } catch { return { ...LIVE_CALC_DEFAULT }; }
+  });
+  const [customLoaded, setCustomLoaded] = useState(() => {
+    try { return !!localStorage.getItem(LIVE_CALC_KEY); } catch { return false; }
+  });
+  const [saveToast, setSaveToast] = useState(false);
+
+  const set = (key, value) => setVals(prev => ({ ...prev, [key]: parseFloat(value) || 0 }));
+
+  // Recalculate live
+  const rpmTheo = calcRPM(vals.vc, vals.D);
+  const rpm = Math.round(Math.min(rpmTheo, maxRPM) / 10) * 10;
+  const limited = rpmTheo > maxRPM;
+  const vcActual = (rpm * Math.PI * vals.D) / 1000;
+  const vf = vals.fz * vals.z * rpm;
+  const mrr = (vals.ae * vals.ap * vf) / 1000;
+
+  const handleSave = () => {
+    localStorage.setItem(LIVE_CALC_KEY, JSON.stringify(vals));
+    setCustomLoaded(true);
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 2000);
+  };
+
+  const handleReset = () => {
+    localStorage.removeItem(LIVE_CALC_KEY);
+    setVals({ ...LIVE_CALC_DEFAULT });
+    setCustomLoaded(false);
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div className="sec-title" style={{ marginBottom: 0 }}>// Live Calculator</div>
+        {customLoaded && (
+          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--cyan)", opacity: 0.8 }}>
+            ✓ Custom settings loaded
+          </span>
+        )}
+      </div>
+
+      {/* Inputs */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 16 }}>
+        {[
+          { key: "vc",  label: "Vc (m/min)", step: 1 },
+          { key: "fz",  label: "fz (mm)",    step: 0.001 },
+          { key: "ae",  label: "ae (mm)",     step: 0.1 },
+          { key: "ap",  label: "ap (mm)",     step: 0.5 },
+          { key: "z",   label: "Flutes",      step: 1 },
+          { key: "D",   label: "Ø (mm)",      step: 1 },
+        ].map(({ key, label, step }) => (
+          <div className="inp-group" key={key}>
+            <label className="inp-label">{label}</label>
+            <input
+              className="inp"
+              type="number"
+              step={step}
+              value={vals[key]}
+              onChange={e => set(key, e.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* RPM clamped warning */}
+      {limited && (
+        <div className="warn-box" style={{ marginBottom: 14, fontSize: 12 }}>
+          ⚠ RPM clamped to {maxRPM.toLocaleString()} — theoretical {Math.round(rpmTheo).toLocaleString()} RPM exceeds machine limit
+        </div>
+      )}
+
+      {/* Results */}
+      <div className="grid3" style={{ marginBottom: 16 }}>
+        <div className="stat-box">
+          <div className="stat-val" style={{ color: limited ? "var(--red)" : "var(--cyan)" }}>
+            {rpm.toLocaleString()}
+          </div>
+          <div className="stat-unit">RPM</div>
+          <div className="stat-label">Spindle Speed{limited ? " (limited)" : ""}</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-val" style={{ color: limited ? "var(--yellow)" : "var(--text)" }}>
+            {vcActual.toFixed(1)}
+          </div>
+          <div className="stat-unit">m/min</div>
+          <div className="stat-label">Actual Vc{limited ? " (after clamp)" : ""}</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-val" style={{ color: "var(--green)" }}>
+            {mrr.toFixed(2)}
+          </div>
+          <div className="stat-unit">cm³/min</div>
+          <div className="stat-label">MRR</div>
+        </div>
+      </div>
+
+      {/* Save / Reset */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <button
+          className="btn btn-primary"
+          onClick={handleSave}
+          style={{ fontSize: 12, padding: "7px 18px" }}
+        >
+          {saveToast ? "✓ Saved!" : "💾 Save as Custom"}
+        </button>
+        <button
+          className="btn"
+          onClick={handleReset}
+          style={{ fontSize: 12, padding: "7px 18px" }}
+        >
+          ↺ Reset to Default
+        </button>
+        {saveToast && (
+          <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--green)" }}>
+            Settings saved to browser
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -574,6 +707,9 @@ function MrrTab({ activeMachine }) {
 
   return (
     <div className="animate-in">
+      {/* Live Calculator */}
+      <LiveCalc activeMachine={activeMachine} />
+
       {/* Machine + Material controls */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", gap: 8 }}>
