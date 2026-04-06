@@ -11,7 +11,9 @@ import {
   useSensor,
   useSensors,
   useDroppable,
-  closestCenter,
+  pointerWithin,
+  rectIntersection,
+  type CollisionDetection,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -87,6 +89,17 @@ const KANBAN_COLS: {
   { id: "Inspection",    label: "Inspection",    color: "#86efac", border: "rgba(134,239,172,0.35)", bg: "rgba(34,197,94,0.08)"   },
   { id: "Done",          label: "Done",          color: "#22c55e", border: "rgba(34,197,94,0.35)",   bg: "rgba(34,197,94,0.06)"   },
 ];
+
+// ── Collision detection ────────────────────────────────────────────────────
+
+const kanbanCollision: CollisionDetection = (args) => {
+  const VALID_COLS = new Set<string>(KANBAN_COLS.map((c) => c.id));
+  const pointerHits = pointerWithin(args);
+  const colHit = pointerHits.find((h) => VALID_COLS.has(h.id as string));
+  if (colHit) return [colHit];
+  if (pointerHits.length > 0) return pointerHits;
+  return rectIntersection(args);
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -448,6 +461,7 @@ function KanbanCol({
 
   return (
     <div
+      ref={setNodeRef}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -481,9 +495,8 @@ function KanbanCol({
         </span>
       </div>
 
-      {/* Drop zone */}
+      {/* Cards area */}
       <div
-        ref={setNodeRef}
         style={{
           flex: 1,
           display: "flex",
@@ -746,7 +759,7 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
       {/* Board */}
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={kanbanCollision}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
