@@ -1611,6 +1611,7 @@ function ProjectRow({
       style={{
         borderBottom: `1px solid ${C.border}`,
         backgroundColor: isExpanded ? "rgba(232,160,32,0.05)" : "transparent",
+        minWidth: 0,
       }}
     >
       {/* Toggle indicator */}
@@ -1630,11 +1631,13 @@ function ProjectRow({
 
       {/* Project name */}
       <span
-        className="font-semibold truncate flex-1 min-w-0"
+        className="font-semibold truncate"
         style={{
           fontSize: 13,
           color: C.accent,
           fontFamily: "var(--font-jetbrains-mono)",
+          flex: "1 1 0",
+          minWidth: 0,
         }}
       >
         {tool.projectName}
@@ -1717,10 +1720,9 @@ function PartTreeRow({
       style={{
         paddingLeft: 36,
         borderBottom: `1px solid rgba(42,45,48,0.5)`,
-        backgroundColor: isSelected
-          ? C.accentDim
-          : "transparent",
+        backgroundColor: isSelected ? C.accentDim : "transparent",
         transition: "background-color 0.1s",
+        minWidth: 0,
       }}
       onMouseEnter={(e) => {
         if (!isSelected)
@@ -1742,8 +1744,8 @@ function PartTreeRow({
           fontSize: 11,
           color: C.accent,
           fontFamily: "var(--font-jetbrains-mono)",
-          minWidth: 120,
-          maxWidth: 160,
+          flex: "0 0 auto",
+          maxWidth: 150,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -1758,6 +1760,7 @@ function PartTreeRow({
           fontSize: 11,
           color: C.textDim,
           flex: 1,
+          minWidth: 0,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",

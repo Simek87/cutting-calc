@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
   useDroppable,
+  closestCenter,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -389,11 +390,61 @@ function PartCard({
 function KanbanCol({
   col,
   parts,
+  collapsed,
+  onToggleCollapse,
 }: {
   col: (typeof KANBAN_COLS)[number];
   parts: KanbanPart[];
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          width: 40,
+          flexShrink: 0,
+          borderRadius: 6,
+          backgroundColor: col.bg,
+          border: `1px solid ${col.border}`,
+          cursor: "pointer",
+          padding: "8px 0",
+          gap: 8,
+          userSelect: "none",
+        }}
+        onClick={onToggleCollapse}
+        title={`Expand ${col.label}`}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            color: col.color,
+            writingMode: "vertical-rl",
+            transform: "rotate(180deg)",
+            letterSpacing: "0.06em",
+          }}
+        >
+          {col.label}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            color: col.color,
+            opacity: 0.7,
+            fontFamily: "var(--font-jetbrains-mono)",
+          }}
+        >
+          {parts.length}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -407,6 +458,7 @@ function KanbanCol({
     >
       {/* Column header */}
       <div
+        onClick={onToggleCollapse}
         style={{
           display: "flex",
           alignItems: "center",
@@ -416,7 +468,10 @@ function KanbanCol({
           borderRadius: 5,
           backgroundColor: col.bg,
           border: `1px solid ${col.border}`,
+          cursor: "pointer",
+          userSelect: "none",
         }}
+        title={`Collapse ${col.label}`}
       >
         <span style={{ fontSize: 11, fontWeight: 600, color: col.color }}>
           {col.label}
@@ -466,6 +521,16 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [projectFilter, setProjectFilter] = useState<string>("ALL");
   const [sectionFilter, setSectionFilter] = useState<SectionCode | "ALL">("ALL");
+  const [collapsedCols, setCollapsedCols] = useState<Set<KanbanColId>>(new Set());
+
+  const toggleColCollapse = useCallback((colId: KanbanColId) => {
+    setCollapsedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(colId)) next.delete(colId);
+      else next.add(colId);
+      return next;
+    });
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -486,7 +551,16 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
       if (!over) return;
 
       const partId = active.id as string;
-      const targetColId = over.id as KanbanColId;
+      const overId = over.id as string;
+      const VALID_COLS = new Set<string>(KANBAN_COLS.map((c) => c.id));
+      const targetColId = (
+        VALID_COLS.has(overId)
+          ? overId
+          : (over.data?.current as { sortable?: { containerId?: string } })
+              ?.sortable?.containerId ?? overId
+      ) as KanbanColId;
+      if (!VALID_COLS.has(targetColId)) return;
+
       const part = parts.find((p) => p.id === partId);
       if (!part) return;
 
@@ -672,6 +746,7 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
       {/* Board */}
       <DndContext
         sensors={sensors}
+        collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -685,7 +760,13 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
           }}
         >
           {KANBAN_COLS.map((col) => (
-            <KanbanCol key={col.id} col={col} parts={colParts[col.id]} />
+            <KanbanCol
+              key={col.id}
+              col={col}
+              parts={colParts[col.id]}
+              collapsed={collapsedCols.has(col.id)}
+              onToggleCollapse={() => toggleColCollapse(col.id)}
+            />
           ))}
         </div>
 
