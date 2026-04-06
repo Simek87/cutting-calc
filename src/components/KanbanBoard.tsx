@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -90,6 +90,12 @@ const KANBAN_COLS: {
   { id: "Done",          label: "Done",          color: "#22c55e", border: "rgba(34,197,94,0.35)",   bg: "rgba(34,197,94,0.06)"   },
 ];
 
+const TODO_TARGETS: { column: "MyTasks" | "Hurco" | "Danusys"; label: string }[] = [
+  { column: "MyTasks",  label: "My Tasks"      },
+  { column: "Hurco",    label: "Hurco Queue"   },
+  { column: "Danusys",  label: "Danusys Queue" },
+];
+
 // ── Collision detection ────────────────────────────────────────────────────
 
 const kanbanCollision: CollisionDetection = (args) => {
@@ -172,15 +178,17 @@ function getEntryStatus(op: PartOp): string {
   return "InProgress";
 }
 
+function getWeekStart(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
 // ── Toast ─────────────────────────────────────────────────────────────────
 
-function KanbanToast({
-  message,
-  onDismiss,
-}: {
-  message: string;
-  onDismiss: () => void;
-}) {
+function KanbanToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   useEffect(() => {
     const t = setTimeout(onDismiss, 3000);
     return () => clearTimeout(t);
@@ -209,14 +217,158 @@ function KanbanToast({
   );
 }
 
-// ── Week Monday helper ─────────────────────────────────────────────────────
+// ── Context Menu ──────────────────────────────────────────────────────────
 
-function getWeekStart(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().slice(0, 10);
+function ContextMenu({
+  x,
+  y,
+  part,
+  currentColId,
+  activeOp,
+  onClose,
+  onToast,
+  onMove,
+}: {
+  x: number;
+  y: number;
+  part: KanbanPart;
+  currentColId: KanbanColId;
+  activeOp: PartOp | null;
+  onClose: () => void;
+  onToast: (msg: string) => void;
+  onMove: (partId: string, targetColId: KanbanColId) => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const MENU_W = 170;
+  const MENU_H = 260;
+
+  const left = Math.min(x, (typeof window !== "undefined" ? window.innerWidth : 1200) - MENU_W - 8);
+  const top  = Math.min(y, (typeof window !== "undefined" ? window.innerHeight : 800) - MENU_H - 8);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const handleAddTodo = async (column: "MyTasks" | "Hurco" | "Danusys") => {
+    onClose();
+    if (!activeOp) return;
+    await fetch("/api/todo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        column,
+        text: part.name,
+        subtext: activeOp.name,
+        weekStart: getWeekStart(),
+        linkedPartId: part.id,
+        linkedOperationId: activeOp.id,
+      }),
+    });
+    const label = TODO_TARGETS.find((t) => t.column === column)?.label ?? column;
+    onToast(`Added "${part.name}" to ${label}`);
+  };
+
+  const sectionLabel: React.CSSProperties = {
+    padding: "5px 12px 3px",
+    fontSize: 10,
+    fontWeight: 700,
+    color: C.textMuted,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    userSelect: "none",
+  };
+
+  const moveCols = KANBAN_COLS.filter((c) => c.id !== currentColId);
+
+  return (
+    <div
+      ref={menuRef}
+      style={{
+        position: "fixed",
+        top,
+        left,
+        zIndex: 9998,
+        minWidth: MENU_W,
+        backgroundColor: "#1a1d20",
+        border: `1px solid ${C.border}`,
+        borderRadius: 7,
+        boxShadow: "0 8px 28px rgba(0,0,0,0.65)",
+        padding: "4px 0",
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Add to To-Do */}
+      <div style={sectionLabel}>Add to To-Do</div>
+      {TODO_TARGETS.map((t) => (
+        <MenuItem
+          key={t.column}
+          label={t.label}
+          disabled={!activeOp}
+          onSelect={() => handleAddTodo(t.column)}
+        />
+      ))}
+
+      {/* Divider */}
+      <div style={{ height: 1, backgroundColor: C.border, margin: "4px 0" }} />
+
+      {/* Move to */}
+      <div style={sectionLabel}>Move to</div>
+      {moveCols.map((col) => (
+        <MenuItem
+          key={col.id}
+          label={col.label}
+          color={col.color}
+          onSelect={() => { onClose(); onMove(part.id, col.id); }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MenuItem({
+  label,
+  color,
+  disabled,
+  onSelect,
+}: {
+  label: string;
+  color?: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onMouseDown={(e) => { e.preventDefault(); if (!disabled) onSelect(); }}
+      style={{
+        padding: "5px 12px",
+        fontSize: 12,
+        color: disabled ? C.textMuted : (color ?? C.text),
+        cursor: disabled ? "default" : "pointer",
+        backgroundColor: hovered && !disabled ? "rgba(232,160,32,0.1)" : "transparent",
+        userSelect: "none",
+        transition: "background-color 0.08s",
+      }}
+    >
+      {label}
+    </div>
+  );
 }
 
 // ── Part Card ─────────────────────────────────────────────────────────────
@@ -225,15 +377,17 @@ function PartCard({
   part,
   isDragging,
   onToast,
+  onMove,
 }: {
   part: KanbanPart;
   isDragging?: boolean;
   onToast: (msg: string) => void;
+  onMove: (partId: string, targetColId: KanbanColId) => void;
 }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, active } =
     useSortable({ id: part.id });
-  const [addingTodo, setAddingTodo] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -242,37 +396,18 @@ function PartCard({
   };
 
   const activeOp = getActiveOp(part);
+  const currentColId = getPartColumnId(part);
   const progress = getPartProgress(part);
   const sectionCode = part.sectionName ? toSectionCode(part.sectionName) : null;
   const sectionStyle = sectionCode ? (SECTION_STYLE[sectionCode] ?? null) : null;
-  const isOverdue =
-    part.dueDate && !isDragging
-      ? new Date(part.dueDate) < new Date()
-      : false;
-
+  const isOverdue = part.dueDate && !isDragging ? new Date(part.dueDate) < new Date() : false;
   const pips = part.operations.slice(0, 8);
 
-  const handleAddTodo = async (e: React.MouseEvent) => {
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (isDragging) return;
+    e.preventDefault();
     e.stopPropagation();
-    if (!activeOp || addingTodo) return;
-    setAddingTodo(true);
-    try {
-      await fetch("/api/todo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          column: "MyTasks",
-          text: part.name,
-          subtext: activeOp.name,
-          weekStart: getWeekStart(),
-          linkedPartId: part.id,
-          linkedOperationId: activeOp.id,
-        }),
-      });
-      onToast(`Added "${part.name}" to My Tasks`);
-    } finally {
-      setAddingTodo(false);
-    }
+    setMenu({ x: e.clientX, y: e.clientY });
   };
 
   return (
@@ -287,37 +422,8 @@ function PartCard({
         cursor: isDragging ? "grabbing" : "default",
         position: "relative",
       }}
-      className="group"
+      onContextMenu={handleContextMenu}
     >
-      {/* + TO-DO button — top-right, visible on hover */}
-      {activeOp && !isDragging && (
-        <button
-          onClick={handleAddTodo}
-          disabled={addingTodo}
-          title="Add to My Tasks"
-          className="opacity-0 group-hover:opacity-100"
-          style={{
-            position: "absolute",
-            top: 5,
-            right: 6,
-            fontSize: 9,
-            padding: "2px 5px",
-            borderRadius: 3,
-            border: `1px solid ${C.border}`,
-            backgroundColor: C.bg,
-            color: addingTodo ? C.textMuted : C.accent,
-            cursor: addingTodo ? "not-allowed" : "pointer",
-            fontFamily: "var(--font-jetbrains-mono)",
-            fontWeight: 600,
-            lineHeight: 1.4,
-            transition: "opacity 0.15s",
-            zIndex: 1,
-          }}
-        >
-          {addingTodo ? "…" : "+ TODO"}
-        </button>
-      )}
-
       {/* Drag handle */}
       <div
         {...attributes}
@@ -329,9 +435,7 @@ function PartCard({
           justifyContent: "center",
         }}
       >
-        <div
-          style={{ width: 20, height: 3, backgroundColor: C.border, borderRadius: 2 }}
-        />
+        <div style={{ width: 20, height: 3, backgroundColor: C.border, borderRadius: 2 }} />
       </div>
 
       {/* Clickable content */}
@@ -339,7 +443,7 @@ function PartCard({
         style={{ padding: "2px 10px 8px", cursor: "pointer" }}
         onClick={() => router.push(`/tools/${part.toolId}/parts/${part.id}`)}
       >
-        {/* Part name — paddingRight to avoid overlap with + TODO button */}
+        {/* Part name */}
         <div
           style={{
             fontSize: 12,
@@ -350,21 +454,13 @@ function PartCard({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            paddingRight: activeOp ? 44 : 0,
           }}
         >
           {part.name}
         </div>
 
         {/* Tool name + section badge */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            marginBottom: 6,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
           <span
             style={{
               fontSize: 10,
@@ -439,13 +535,7 @@ function PartCard({
               {activeOp.name}
             </span>
           ) : (
-            <span
-              style={{
-                fontSize: 10,
-                color: "#22c55e",
-                fontFamily: "var(--font-jetbrains-mono)",
-              }}
-            >
+            <span style={{ fontSize: 10, color: "#22c55e", fontFamily: "var(--font-jetbrains-mono)" }}>
               DONE
             </span>
           )}
@@ -458,19 +548,14 @@ function PartCard({
                 fontFamily: "var(--font-jetbrains-mono)",
               }}
             >
-              {new Date(part.dueDate).toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "short",
-              })}
+              {new Date(part.dueDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
             </span>
           )}
         </div>
 
         {/* Progress pips */}
         {pips.length > 0 && (
-          <div
-            style={{ display: "flex", gap: 2, marginTop: 5, alignItems: "center" }}
-          >
+          <div style={{ display: "flex", gap: 2, marginTop: 5, alignItems: "center" }}>
             {pips.map((op) => (
               <div
                 key={op.id}
@@ -497,6 +582,20 @@ function PartCard({
           </div>
         )}
       </div>
+
+      {/* Context menu */}
+      {menu && !isDragging && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          part={part}
+          currentColId={currentColId}
+          activeOp={activeOp}
+          onClose={() => setMenu(null)}
+          onToast={onToast}
+          onMove={onMove}
+        />
+      )}
     </div>
   );
 }
@@ -509,12 +608,14 @@ function KanbanCol({
   collapsed,
   onToggleCollapse,
   onToast,
+  onMove,
 }: {
   col: (typeof KANBAN_COLS)[number];
   parts: KanbanPart[];
   collapsed: boolean;
   onToggleCollapse: () => void;
   onToast: (msg: string) => void;
+  onMove: (partId: string, targetColId: KanbanColId) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
 
@@ -567,13 +668,7 @@ function KanbanCol({
   return (
     <div
       ref={setNodeRef}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minWidth: 200,
-        width: 200,
-        flexShrink: 0,
-      }}
+      style={{ display: "flex", flexDirection: "column", minWidth: 200, width: 200, flexShrink: 0 }}
     >
       {/* Column header */}
       <div
@@ -592,12 +687,8 @@ function KanbanCol({
         }}
         title={`Collapse ${col.label}`}
       >
-        <span style={{ fontSize: 11, fontWeight: 600, color: col.color }}>
-          {col.label}
-        </span>
-        <span style={{ fontSize: 11, color: col.color, opacity: 0.7 }}>
-          {parts.length}
-        </span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: col.color }}>{col.label}</span>
+        <span style={{ fontSize: 11, color: col.color, opacity: 0.7 }}>{parts.length}</span>
       </div>
 
       {/* Cards area */}
@@ -610,21 +701,14 @@ function KanbanCol({
           borderRadius: 6,
           padding: 6,
           minHeight: 120,
-          backgroundColor: isOver
-            ? "rgba(232,160,32,0.06)"
-            : "rgba(255,255,255,0.02)",
-          border: isOver
-            ? "1px dashed rgba(232,160,32,0.4)"
-            : "1px solid transparent",
+          backgroundColor: isOver ? "rgba(232,160,32,0.06)" : "rgba(255,255,255,0.02)",
+          border: isOver ? "1px dashed rgba(232,160,32,0.4)" : "1px solid transparent",
           transition: "background-color 0.15s, border-color 0.15s",
         }}
       >
-        <SortableContext
-          items={parts.map((p) => p.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={parts.map((p) => p.id)} strategy={verticalListSortingStrategy}>
           {parts.map((p) => (
-            <PartCard key={p.id} part={p} onToast={onToast} />
+            <PartCard key={p.id} part={p} onToast={onToast} onMove={onMove} />
           ))}
         </SortableContext>
       </div>
@@ -660,8 +744,64 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
     [initialParts]
   );
 
-  const handleDragStart = (e: DragStartEvent) =>
-    setActiveId(e.active.id as string);
+  /** Shared move logic used by both drag-and-drop and context menu. */
+  const applyMove = useCallback(
+    async (partId: string, targetColId: KanbanColId) => {
+      const part = parts.find((p) => p.id === partId);
+      if (!part) return;
+
+      const currentColId = getPartColumnId(part);
+      if (currentColId === targetColId) return;
+
+      const activeOp = getActiveOp(part);
+      const statusUpdates: { opId: string; status: string }[] = [];
+
+      if (targetColId === "Done") {
+        for (const op of part.operations) {
+          if (!["Done", "Received"].includes(op.status)) {
+            statusUpdates.push({ opId: op.id, status: getDoneStatus(op) });
+          }
+        }
+      } else {
+        if (activeOp) {
+          statusUpdates.push({ opId: activeOp.id, status: getDoneStatus(activeOp) });
+        }
+        const targetOp = part.operations.find(
+          (op) => opMatchesColumn(op, targetColId) && !["Done", "Received"].includes(op.status)
+        );
+        if (targetOp) {
+          statusUpdates.push({ opId: targetOp.id, status: getEntryStatus(targetOp) });
+        }
+      }
+
+      if (statusUpdates.length === 0) return;
+
+      // Optimistic update
+      setParts((prev) =>
+        prev.map((p) => {
+          if (p.id !== partId) return p;
+          let ops = [...p.operations];
+          for (const u of statusUpdates) {
+            ops = ops.map((op) => (op.id === u.opId ? { ...op, status: u.status } : op));
+          }
+          return { ...p, operations: ops };
+        })
+      );
+
+      await Promise.all(
+        statusUpdates.map((u) =>
+          fetch(`/api/operations/${u.opId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: u.status }),
+          })
+        )
+      );
+    },
+    [parts]
+  );
+
+  const handleDragStart = (e: DragStartEvent) => setActiveId(e.active.id as string);
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
@@ -680,68 +820,9 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
       ) as KanbanColId;
       if (!VALID_COLS.has(targetColId)) return;
 
-      const part = parts.find((p) => p.id === partId);
-      if (!part) return;
-
-      const currentColId = getPartColumnId(part);
-      if (currentColId === targetColId) return;
-
-      const activeOp = getActiveOp(part);
-      const statusUpdates: { opId: string; status: string }[] = [];
-
-      if (targetColId === "Done") {
-        for (const op of part.operations) {
-          if (!["Done", "Received"].includes(op.status)) {
-            statusUpdates.push({ opId: op.id, status: getDoneStatus(op) });
-          }
-        }
-      } else {
-        if (activeOp) {
-          statusUpdates.push({
-            opId: activeOp.id,
-            status: getDoneStatus(activeOp),
-          });
-        }
-        const targetOp = part.operations.find(
-          (op) =>
-            opMatchesColumn(op, targetColId) &&
-            !["Done", "Received"].includes(op.status)
-        );
-        if (targetOp) {
-          statusUpdates.push({
-            opId: targetOp.id,
-            status: getEntryStatus(targetOp),
-          });
-        }
-      }
-
-      if (statusUpdates.length === 0) return;
-
-      // Optimistic update
-      setParts((prev) =>
-        prev.map((p) => {
-          if (p.id !== partId) return p;
-          let ops = [...p.operations];
-          for (const u of statusUpdates) {
-            ops = ops.map((op) =>
-              op.id === u.opId ? { ...op, status: u.status } : op
-            );
-          }
-          return { ...p, operations: ops };
-        })
-      );
-
-      await Promise.all(
-        statusUpdates.map((u) =>
-          fetch(`/api/operations/${u.opId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: u.status }),
-          })
-        )
-      );
+      await applyMove(partId, targetColId);
     },
-    [parts]
+    [applyMove]
   );
 
   // Filter
@@ -815,9 +896,7 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
         >
           <option value="ALL">All Projects</option>
           {projectNames.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
+            <option key={n} value={n}>{n}</option>
           ))}
         </select>
 
@@ -829,25 +908,16 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
             return (
               <button
                 key={code}
-                onClick={() =>
-                  setSectionFilter(code as typeof sectionFilter)
-                }
+                onClick={() => setSectionFilter(code as typeof sectionFilter)}
                 style={{
                   padding: "3px 10px",
                   fontSize: 11,
                   borderRadius: 4,
                   cursor: "pointer",
-                  fontFamily:
-                    code !== "ALL"
-                      ? "var(--font-jetbrains-mono)"
-                      : undefined,
-                  backgroundColor: isActive
-                    ? (s?.bg ?? C.accentDim)
-                    : "transparent",
+                  fontFamily: code !== "ALL" ? "var(--font-jetbrains-mono)" : undefined,
+                  backgroundColor: isActive ? (s?.bg ?? C.accentDim) : "transparent",
                   color: isActive ? (s?.text ?? C.accent) : C.textDim,
-                  border: `1px solid ${
-                    isActive ? (s?.border ?? C.accentBorder) : C.border
-                  }`,
+                  border: `1px solid ${isActive ? (s?.border ?? C.accentBorder) : C.border}`,
                   transition: "all 0.1s",
                 }}
               >
@@ -869,15 +939,7 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            overflowX: "auto",
-            flex: 1,
-            paddingBottom: 8,
-          }}
-        >
+        <div style={{ display: "flex", gap: 10, overflowX: "auto", flex: 1, paddingBottom: 8 }}>
           {KANBAN_COLS.map((col) => (
             <KanbanCol
               key={col.id}
@@ -886,12 +948,15 @@ export function KanbanBoard({ initialParts }: { initialParts: KanbanPart[] }) {
               collapsed={collapsedCols.has(col.id)}
               onToggleCollapse={() => toggleColCollapse(col.id)}
               onToast={setToast}
+              onMove={applyMove}
             />
           ))}
         </div>
 
         <DragOverlay>
-          {activePart ? <PartCard part={activePart} isDragging onToast={setToast} /> : null}
+          {activePart ? (
+            <PartCard part={activePart} isDragging onToast={setToast} onMove={applyMove} />
+          ) : null}
         </DragOverlay>
       </DndContext>
 
