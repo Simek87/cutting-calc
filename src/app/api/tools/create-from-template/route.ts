@@ -40,8 +40,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "projectName is required" }, { status: 400 });
   }
 
+  const activeSections = body.sections.filter((s) => s.parts.length > 0);
+
   const tool = await prisma.$transaction(async (tx) => {
-    // 1. Create the tool
+    // ── Q1: Create tool ────────────────────────────────────────────────────
     const newTool = await tx.tool.create({
       data: {
         projectName: body.projectName.trim(),
@@ -52,40 +54,66 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2. Create sections and parts
-    for (const sectionData of body.sections) {
-      if (sectionData.parts.length === 0) continue;
+    if (activeSections.length === 0) return newTool;
 
-      const section = await tx.section.create({
-        data: { name: sectionData.code, toolId: newTool.id },
-      });
+    // ── Q2: Create all sections in one insert ──────────────────────────────
+    await tx.section.createMany({
+      data: activeSections.map((s) => ({ name: s.code, toolId: newTool.id })),
+    });
 
-      for (const partData of sectionData.parts) {
+    // ── Q3: Fetch section IDs ──────────────────────────────────────────────
+    const createdSections = await tx.section.findMany({
+      where: { toolId: newTool.id },
+      select: { id: true, name: true },
+    });
+    const sectionMap = new Map(createdSections.map((s) => [s.name, s.id]));
+
+    // ── Q4: Create all parts in one insert ────────────────────────────────
+    await tx.part.createMany({
+      data: activeSections.flatMap((s) =>
+        s.parts.map((p) => ({
+          toolId: newTool.id,
+          sectionId: sectionMap.get(s.code)!,
+          name: p.name,
+          quantity: p.qty,
+          isStandard: p.isStandard,
+          conversionStatus:
+            body.projectType === "Conversion"
+              ? (p.conversionStatus as ConversionStatus) ?? ConversionStatus.New
+              : ConversionStatus.New,
+        }))
+      ),
+    });
+
+    // ── Q5: Fetch part IDs ─────────────────────────────────────────────────
+    const createdParts = await tx.part.findMany({
+      where: { toolId: newTool.id },
+      select: { id: true, name: true, sectionId: true },
+    });
+    // Key: "sectionId:partName" — unique within a tool
+    const partMap = new Map(
+      createdParts.map((p) => [`${p.sectionId}:${p.name}`, p.id])
+    );
+
+    // ── Q6: Create all operations in one insert ────────────────────────────
+    const allOps = activeSections.flatMap((s) => {
+      const sectionId = sectionMap.get(s.code)!;
+      return s.parts.flatMap((partData) => {
         const ops = OP_PRESETS[partData.opPreset] ?? [];
+        const partId = partMap.get(`${sectionId}:${partData.name}`)!;
+        return ops.map((op) => ({
+          partId,
+          name: op.name,
+          type: op.type,
+          order: op.order,
+          dependsOnPrevious: op.dependsOnPrevious ?? true,
+          status: getInitialOpStatus(op.type),
+        }));
+      });
+    });
 
-        await tx.part.create({
-          data: {
-            toolId: newTool.id,
-            sectionId: section.id,
-            name: partData.name,
-            quantity: partData.qty,
-            isStandard: partData.isStandard,
-            conversionStatus:
-              body.projectType === "Conversion"
-                ? (partData.conversionStatus as ConversionStatus) ?? ConversionStatus.New
-                : ConversionStatus.New,
-            operations: {
-              create: ops.map((op) => ({
-                name: op.name,
-                type: op.type,
-                order: op.order,
-                dependsOnPrevious: op.dependsOnPrevious ?? true,
-                status: getInitialOpStatus(op.type),
-              })),
-            },
-          },
-        });
-      }
+    if (allOps.length > 0) {
+      await tx.operation.createMany({ data: allOps });
     }
 
     return newTool;
