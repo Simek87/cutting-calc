@@ -341,7 +341,7 @@ function AddItemForm({
 
   const selectPart = (p: KanbanPart) => {
     const op = getActiveOp(p);
-    setText(p.name);
+    setText(`${p.toolName} — ${p.name}`);
     setSubtext(op?.name ?? "");
     setLinkedPartId(p.id);
     setLinkedOperationId(op?.id ?? null);
@@ -550,84 +550,6 @@ function AddItemForm({
   );
 }
 
-// ── My Tasks quick-add (always-visible inline form at top) ────────────────
-
-function MyTasksQuickAdd({
-  weekStart,
-  onAdd,
-}: {
-  weekStart: string;
-  onAdd: (item: TodoItem) => void;
-}) {
-  const [text, setText] = useState("");
-  const [subtext, setSubtext] = useState("Other");
-  const [submitting, setSubmitting] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleSubmit = async () => {
-    if (!text.trim() || submitting) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/todo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          column: "MyTasks",
-          text: text.trim(),
-          subtext: subtext || null,
-          weekStart,
-          order: 0,
-        }),
-      });
-      if (res.ok) {
-        const item = await res.json();
-        onAdd(item);
-        setText("");
-        inputRef.current?.focus();
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div
-      className="rounded-lg p-2 space-y-1.5 flex-shrink-0"
-      style={{ border: `1px solid ${C.border}`, backgroundColor: C.surface2 }}
-    >
-      <input
-        ref={inputRef}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
-        placeholder="New task…"
-        className="w-full text-sm rounded px-2 py-1.5 outline-none"
-        style={{ backgroundColor: C.bg, color: C.text, border: `1px solid ${C.border}` }}
-      />
-      <div className="flex gap-1.5">
-        <select
-          value={subtext}
-          onChange={(e) => setSubtext(e.target.value)}
-          className="flex-1 text-xs rounded px-2 py-1 outline-none min-w-0"
-          style={{ backgroundColor: C.bg, color: C.textDim, border: `1px solid ${C.border}` }}
-        >
-          {MY_TASKS_SUBTEXTS.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <button
-          onClick={handleSubmit}
-          disabled={!text.trim() || submitting}
-          className="flex-shrink-0 text-xs px-3 py-1 rounded font-semibold disabled:opacity-30"
-          style={{ backgroundColor: C.surface, color: C.text, border: `1px solid ${C.border}` }}
-        >
-          +
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── Column component ───────────────────────────────────────────────────────
 
 function TodoColumn({
@@ -698,13 +620,6 @@ function TodoColumn({
           {done}/{total}
         </span>
       </div>
-
-      {/* My Tasks quick-add at top */}
-      {col.key === "MyTasks" && (
-        <div className="px-2 pt-2 flex-shrink-0">
-          <MyTasksQuickAdd weekStart={weekStart} onAdd={onAdd} />
-        </div>
-      )}
 
       {/* Items */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
