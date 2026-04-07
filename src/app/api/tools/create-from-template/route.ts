@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // ── Q1: Create tool ────────────────────────────────────────────────────
     const newTool = await tx.tool.create({
       data: {
-        projectName: body.projectName.trim(),
+        projectName: body.projectType === "Conversion" ? `${body.projectName.trim()} - KMD78-2 Conversion` : body.projectName.trim(),
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
         status: (body.status as ToolStatus) ?? ToolStatus.Management,
         projectType: body.projectType === "Conversion" ? ProjectType.Conversion : ProjectType.NewTool,
