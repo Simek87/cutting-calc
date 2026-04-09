@@ -110,7 +110,7 @@ const DEFAULT_SECTIONS: Section[] = [
     rows: [
       makeRow("Max weight", "80 kg"),
       makeRow("Cutter height", "56 mm"),
-      makeRow("Knife", "30 mm 3pt universal 60° centre bevel unless agreed otherwise"),
+      makeRow("Knife", "30 mm 3pt universal 60° centre bevel, 1.05 mm thickness, unless agreed otherwise"),
       makeRow("Back plate", "Hardox 500 — raw material 8 mm, grind to clean, minimum 6 mm finished"),
       makeRow("Back plate thickness", "20 mm with 10 mm outer fixing to slide into machine. Steel inserts for longevity."),
       makeRow("Cutter blocks", "Aluminium floating design — oil-filled nylon locators, captive screws to mushrooms. Insulation plate between locator and block. Hard anodised."),
@@ -168,7 +168,7 @@ const GENERAL_NOTES = [
   "All separate parts to have weights and Enviropax code clearly marked.",
 ];
 
-const STORAGE_KEY = "spec-ref-sections-v1";
+const STORAGE_KEY = "spec-ref-sections-v2";
 
 function loadSections(): Section[] {
   if (typeof window === "undefined") return DEFAULT_SECTIONS;
