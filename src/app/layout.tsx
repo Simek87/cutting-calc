@@ -78,6 +78,9 @@ export default async function RootLayout({
           <Link href="/reference" className="text-sm" style={{ color: "#8b9196" }}>
             Reference
           </Link>
+          <Link href="/fusion-refs" className="text-sm" style={{ color: "#8b9196" }}>
+            Fusion Refs
+          </Link>
           <Link href="/spec" className="text-sm" style={{ color: "#8b9196" }}>
             Spec Ref
           </Link>

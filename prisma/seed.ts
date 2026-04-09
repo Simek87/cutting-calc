@@ -173,6 +173,67 @@ async function main() {
     console.log(`  ✓  ${rd.name} — ${rd.entries.length} entries`);
   }
 
+  // ── Fusion References ─────────────────────────────────────────────────────
+
+  console.log("\nSeeding Fusion References…");
+
+  const existingFusionRefs = await prisma.fusionRef.count();
+  if (existingFusionRefs > 0) {
+    console.log("  ↺  Fusion refs already seeded — skipping");
+  } else {
+    const fusionRefData = [
+      // Moulding
+      { section: "Moulding",      date: "3.2024",  path: "GENERAL/PRODUCTS/P7103",              notes: "assembly + machining" },
+      { section: "Moulding",      date: "10.2024", path: "GENERAL/PRODUCTS/P7537",              notes: "Various" },
+      { section: "Moulding",      date: "2.2025",  path: "GENERAL/PRODUCTS/P7609",              notes: "Design Example, Includes Bolster plate" },
+      { section: "Moulding",      date: "5.2025",  path: "GENERAL/PRODUCTS/P7504",              notes: "Machining, water inlet" },
+      { section: "Moulding",      date: "5.2025",  path: "GENERAL/PRODUCTS/P7555",              notes: "Cavity machining" },
+      { section: "Moulding",      date: "5.2025",  path: "GENERAL/PRODUCTS/P7969",              notes: "Jakies slabe programowanie" },
+      // Cutter
+      { section: "Cutter",        date: "1.2024",  path: "GENERAL/PRODUCTS/M700",               notes: "Quick change cutter block, extrusion model" },
+      { section: "Cutter",        date: "10.2024", path: "GENERAL/PRODUCTS/P7537",              notes: "Various" },
+      { section: "Cutter",        date: "4.2025",  path: "GENERAL/PRODUCTS/P7503",              notes: "Locator Machining" },
+      { section: "Cutter",        date: "5.2025",  path: "GENERAL/PRODUCTS/P7504",              notes: "Machining, Cutter locator, Cutter block" },
+      { section: "Cutter",        date: "5.2025",  path: "GENERAL/PRODUCTS/P7555",              notes: "Machining, Cutter locator, Cutter block" },
+      // Pusher
+      { section: "Pusher",        date: "12.2023", path: "GENERAL/PRODUCTS/SK4",                notes: "Pusher Assembly" },
+      { section: "Pusher",        date: "12.2023", path: "GENERAL/PRODUCTS/W125 SQC",           notes: "Pusher assembly z part; Jakis machining; square extrusion" },
+      { section: "Pusher",        date: "1.2024",  path: "GENERAL/PRODUCTS/M700",               notes: "Pusher assy" },
+      { section: "Pusher",        date: "10.2024", path: "GENERAL/PRODUCTS/P7537",              notes: "Cup machining" },
+      { section: "Pusher",        date: "4.2025",  path: "GENERAL/PRODUCTS/P7503",              notes: "Pusher Cup Concept ** Interesting clamping design" },
+      { section: "Pusher",        date: "5.2025",  path: "GENERAL/PRODUCTS/P7504",              notes: "Machining, Cutter locator, Cutter block" },
+      { section: "Pusher",        date: "5.2025",  path: "GENERAL/PRODUCTS/XXL",                notes: "Pusher cups milling example, pusher mods, new back plate type **" },
+      // Pressure Box
+      { section: "Pressure Box",  date: "10.2024", path: "GENERAL/PRODUCTS/P7537",              notes: "Design KMD78.2 style" },
+      { section: "Pressure Box",  date: "12.2024", path: "GENERAL/PRODUCTS/P7551",              notes: "Plug Machining" },
+      { section: "Pressure Box",  date: "5.2025",  path: "GENERAL/PRODUCTS/P7504",              notes: "Assembly" },
+      { section: "Pressure Box",  date: "5.2025",  path: "GENERAL/PRODUCTS/P7555",              notes: "Plug plates machining" },
+      // Pattern
+      { section: "Pattern",       date: "6.2024",  path: "GENERAL/PRODUCTS/XXL-80",             notes: "Pattern milling example" },
+      { section: "Pattern",       date: "2.2025",  path: "GENERAL/PRODUCTS/P7609",              notes: "Pattern milling example" },
+      { section: "Pattern",       date: "5.2025",  path: "GENERAL/PRODUCTS/P7504",              notes: "Pattern machining" },
+      { section: "Pattern",       date: "5.2025",  path: "GENERAL/PRODUCTS/P7619",              notes: "Pattern milling example" },
+      { section: "Pattern",       date: "5.2025",  path: "GENERAL/PRODUCTS/P7621",              notes: "Pattern milling example" },
+      { section: "Pattern",       date: "5.2025",  path: "GENERAL/PRODUCTS/P7632",              notes: "Pattern milling example" },
+      { section: "Pattern",       date: "5.2025",  path: "GENERAL/PRODUCTS/P7634",              notes: "Pattern milling example" },
+      // Part
+      { section: "Part",          date: "2.2023",  path: "GENERAL/PRODUCTS/R1 Easy Ice",        notes: "Design Produktu" },
+      { section: "Part",          date: "1.2024",  path: "GENERAL/PRODUCTS/P7429",              notes: "Design Produktu owalny" },
+      { section: "Part",          date: "1.2024",  path: "GENERAL/PRODUCTS/P7435",              notes: "Design Produktu hinged ** Ciekawy" },
+      { section: "Part",          date: "12.2024", path: "GENERAL/PRODUCTS/P7551",              notes: "Design Produktu ** Ciekawy" },
+      { section: "Part",          date: "12.2024", path: "GENERAL/PRODUCTS/P7582",              notes: "Przyklad partu z hingem i zatrzaskiem" },
+      { section: "Part",          date: "12.2024", path: "GENERAL/PRODUCTS/P7602",              notes: "Design Produktu ** Ciekawy" },
+      { section: "Part",          date: "5.2025",  path: "GENERAL/PRODUCTS/P7654",              notes: "Design produktu" },
+      { section: "Part",          date: "5.2025",  path: "GENERAL/PRODUCTS/P7655 - Gazebo Small Rec", notes: "Design Produktu, Szkic engrave features" },
+      { section: "Part",          date: "6.2025",  path: "GENERAL/PRODUCTS/P7655 - Gazebo Small Rec", notes: "Design Produktu, Szkic engrave features" },
+      // All
+      { section: "All",           date: "4.2025",  path: "GENERAL/PRODUCTS/P7999-CG25",         notes: "Duzo elementow" },
+    ];
+
+    await prisma.fusionRef.createMany({ data: fusionRefData });
+    console.log(`  ✓  ${fusionRefData.length} fusion refs created`);
+  }
+
   console.log("\nDone.");
 }
 
